@@ -90,6 +90,18 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 .vrow{display:flex;align-items:center;gap:.45rem;}
 input#vol{-webkit-appearance:none;appearance:none;width:68px;height:2px;background:rgba(255,255,255,.14);outline:none;cursor:pointer;border-radius:2px;}
 input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--gold);cursor:pointer;}
+/* Quality badge */
+#quality-badge{position:fixed;top:4.2rem;right:1.8rem;z-index:101;display:none;align-items:center;gap:.35rem;background:rgba(7,8,11,.75);border:1px solid rgba(212,168,67,.2);border-radius:99px;padding:.22rem .7rem;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);backdrop-filter:blur(6px);transition:opacity .3s;}
+#quality-badge.show{display:flex;}
+#quality-badge .qval{color:var(--gold2);font-weight:500;}
+/* Quality menu */
+#quality-menu{position:fixed;bottom:5.5rem;right:1.8rem;z-index:102;display:none;flex-direction:column;gap:.3rem;background:rgba(10,11,16,.92);border:1px solid rgba(212,168,67,.18);border-radius:10px;padding:.5rem;backdrop-filter:blur(10px);min-width:110px;}
+#quality-menu.show{display:flex;}
+.qopt{padding:.45rem .8rem;border-radius:7px;font-size:.78rem;color:var(--muted);cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;border:none;background:none;text-align:left;font-family:'Outfit',sans-serif;width:100%;}
+.qopt:hover{background:rgba(212,168,67,.1);color:var(--text);}
+.qopt.active{color:var(--gold2);background:rgba(212,168,67,.12);}
+.qopt.auto-label{font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:.2rem .8rem .35rem;cursor:default;}
+.qopt.auto-label:hover{background:none;color:var(--muted);}
 </style>
 </head>
 <body>
@@ -121,6 +133,8 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
 </div>
 <div id="loading"><div class="ring"></div><div class="ltxt">Loading…</div></div>
 <div id="buffering"><div class="buf-ring"></div><div class="buf-txt">Loading…</div></div>
+<div id="quality-badge"><span class="qval" id="qval-txt">—</span></div>
+<div id="quality-menu"></div>
 <div id="topbar">
   <button class="backbtn" onclick="goBack()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
   <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>VR KINGS — For Patrons</div>
@@ -144,6 +158,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
     </button>
     <button class="cb" onclick="toggleFS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+    <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);" id="qual-btn">HD</button>
   </div>
 </div>
 
@@ -218,26 +233,53 @@ function initThree() {
   });
   video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
 
+  let hlsInstance = null;
+
   if (VIDEO_URL.includes('.m3u8')) {
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // ── Safari / iOS native HLS ──────────────────────────────────────────
+      // Safari picks quality itself. Best we can do: load, then on manifest
+      // parsed force highest rendition via textTracks hack isn't available,
+      // but we CAN detect what resolution is actually playing and show it.
       video.src = VIDEO_URL;
+      // Poll actual video dimensions once playing — tells us real quality
+      video.addEventListener('playing', updateNativeQualityBadge);
+      video.addEventListener('resize',  updateNativeQualityBadge);
     } else if (Hls.isSupported()) {
-      const hls = new Hls({
+      // ── hls.js (Chrome, Firefox, Android) ───────────────────────────────
+      hlsInstance = new Hls({
         enableWorker: true,
         autoStartLoad: true,
         maxBufferLength: 60,
         maxMaxBufferLength: 120,
         maxBufferSize: 120 * 1000 * 1000,
-        abrEwmaDefaultEstimate: 8000000,
-        startLevel: -1,
-        capLevelToPlayerSize: false
+        // FIX: start at highest quality immediately, don't ramp up slowly
+        startLevel: -1,           // -1 = auto pick best for first segment
+        abrEwmaDefaultEstimate: 20000000, // assume 20Mbps initially → picks high quality
+        capLevelToPlayerSize: false,
       });
-      hls.loadSource(VIDEO_URL);
-      hls.attachMedia(video);
+      hlsInstance.loadSource(VIDEO_URL);
+      hlsInstance.attachMedia(video);
+
+      // Once manifest is loaded, force max level & build quality menu
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        // Force highest level right away
+        hlsInstance.currentLevel = hlsInstance.levels.length - 1;
+        buildQualityMenu(hlsInstance);
+        document.getElementById('qual-btn').style.display = 'flex';
+        document.getElementById('quality-badge').classList.add('show');
+      });
+
+      // Update badge when level switches
+      hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        updateHlsQualityBadge(hlsInstance, data.level);
+      });
     }
   } else {
     video.src = VIDEO_URL;
     video.load();
+    video.addEventListener('playing', updateNativeQualityBadge);
+    video.addEventListener('resize',  updateNativeQualityBadge);
   }
 
   // FIX: Use RGBAFormat instead of deprecated RGBFormat (removed in newer Three.js builds)
@@ -416,13 +458,18 @@ function launch() {
 
 function goBack() {
   if (video) video.pause();
-  // FIX: always clean up gyro on back, reset gyroBtn state
   if (gyroEnabled) {
     window.removeEventListener('deviceorientation', onGyro, true);
     gyroEnabled = false;
     gyroAlphaOffset = null;
   }
-  clearTimeout(hintTimer); // FIX: clear hint timer on back
+  // FIX: destroy HLS instance to free memory
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  qualMenuOpen = false;
+  document.getElementById('quality-menu').classList.remove('show');
+  document.getElementById('quality-badge').classList.remove('show');
+  document.getElementById('qual-btn').style.display = 'none';
+  clearTimeout(hintTimer);
   playerActive = false;
   document.getElementById('canvas').classList.remove('active');
   document.getElementById('topbar').classList.remove('show');
@@ -467,6 +514,89 @@ function toggleFS() {
 }
 function hideHint() { clearTimeout(hintTimer); document.getElementById('draghint').classList.add('gone'); }
 function fmt(s) { if (!s || isNaN(s)) return '0:00'; return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+
+// ── Quality management ───────────────────────────────────────────────────────
+
+function updateNativeQualityBadge() {
+  // For Safari native HLS — read actual decoded video dimensions
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return;
+  const label = qualityLabel(h);
+  document.getElementById('qval-txt').textContent = label;
+  document.getElementById('quality-badge').classList.add('show');
+}
+
+function updateHlsQualityBadge(hls, levelIdx) {
+  const lvl = hls.levels[levelIdx];
+  if (!lvl) return;
+  const h = lvl.height || 0;
+  const kbps = Math.round((lvl.bitrate || 0) / 1000);
+  const label = qualityLabel(h);
+  document.getElementById('qval-txt').textContent = label;
+  document.getElementById('qual-btn').textContent = label;
+  // Highlight active option in menu
+  document.querySelectorAll('.qopt[data-level]').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.level) === levelIdx);
+  });
+}
+
+function qualityLabel(h) {
+  if (h >= 2160) return '4K';
+  if (h >= 1440) return '2K';
+  if (h >= 1080) return '1080p';
+  if (h >= 720)  return '720p';
+  if (h >= 480)  return '480p';
+  if (h >= 360)  return '360p';
+  return h ? h + 'p' : '—';
+}
+
+function buildQualityMenu(hls) {
+  const menu = document.getElementById('quality-menu');
+  menu.innerHTML = '';
+  // Label
+  const lbl = document.createElement('button');
+  lbl.className = 'qopt auto-label';
+  lbl.textContent = 'Quality';
+  menu.appendChild(lbl);
+  // Auto option
+  const autoBtn = document.createElement('button');
+  autoBtn.className = 'qopt';
+  autoBtn.textContent = 'Auto';
+  autoBtn.dataset.level = '-1';
+  autoBtn.onclick = () => { hls.currentLevel = -1; hls.loadLevel = -1; toggleQualityMenu(); };
+  menu.appendChild(autoBtn);
+  // Per-level options (highest first)
+  [...hls.levels].reverse().forEach((lvl, i) => {
+    const realIdx = hls.levels.length - 1 - i;
+    const h = lvl.height || 0;
+    const kbps = Math.round((lvl.bitrate || 0) / 1000);
+    const btn = document.createElement('button');
+    btn.className = 'qopt' + (realIdx === hls.currentLevel ? ' active' : '');
+    btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
+    btn.dataset.level = realIdx;
+    btn.onclick = () => {
+      hls.currentLevel = realIdx; // lock to this level
+      hls.loadLevel   = realIdx;
+      updateHlsQualityBadge(hls, realIdx);
+      toggleQualityMenu();
+    };
+    menu.appendChild(btn);
+  });
+}
+
+let qualMenuOpen = false;
+function toggleQualityMenu() {
+  qualMenuOpen = !qualMenuOpen;
+  document.getElementById('quality-menu').classList.toggle('show', qualMenuOpen);
+}
+// Close menu on canvas click
+window.addEventListener('mousedown', e => {
+  if (qualMenuOpen && !e.target.closest('#quality-menu') && !e.target.closest('#qual-btn')) {
+    qualMenuOpen = false;
+    document.getElementById('quality-menu').classList.remove('show');
+  }
+});
 </script>
 </body>
 </html>
