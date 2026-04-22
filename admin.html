@@ -227,7 +227,7 @@ input::placeholder{color:var(--muted);}
               Copy DeoVR Link
             </button>
           </div>
-          <div class="warn" style="margin-top:.8rem">🥽 This link opens <b>DeoVR app directly</b> on the headset with correct 180°/360° settings, stereo mode and full quality. Patron taps the link on their headset browser — DeoVR opens automatically.</div>
+          <div class="warn" style="margin-top:.8rem">🥽 This link opens <b>DeoVR app directly</b> on the headset with correct 180°/360° settings, stereo mode and full quality. Patron taps the link on their headset browser — DeoVR opens automatically.<br><br>⚠️ <b>Note:</b> DeoVR deep links only work when tapped on the <b>VR headset browser</b> (Quest, Pico, etc.), not on desktop.</div>
         </div>
       </div>
     </div>
@@ -338,10 +338,9 @@ function generate() {
 
   currentJson = JSON.stringify(json, null, 2);
 
-  // DeoVR deep link — encode JSON as data URI
+  // FIX: DeoVR deep link — correct format is deovr://data:application/json;base64,...
   const jsonB64 = btoa(unescape(encodeURIComponent(currentJson)));
-  const jsonDataUrl = 'data:application/json;base64,' + jsonB64;
-  currentDeovrUrl = 'deovr://' + jsonDataUrl;
+  currentDeovrUrl = 'deovr://data:application/json;base64,' + jsonB64;
 
   // Update UI
   document.getElementById('url-browser').textContent = browserUrl;

@@ -168,7 +168,17 @@ if (!VIDEO_URL) {
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 } else {
-  document.getElementById('deovr-link').href = 'deovr://play?url=' + encodeURIComponent(VIDEO_URL);
+  // FIX: Build proper DeoVR JSON deep link with correct format flags
+  const deovrJson = JSON.stringify({
+    title: 'VR KINGS Video',
+    is3d: IS_180,
+    screenType: IS_180 ? 'dome' : 'sphere',
+    stereoMode: IS_180 ? 'sbs' : 'off',
+    skipIntro: 0,
+    encodings: [{ name: 'hls', videoSources: [{ resolution: 2700, url: VIDEO_URL }] }]
+  });
+  const jsonB64 = btoa(unescape(encodeURIComponent(deovrJson)));
+  document.getElementById('deovr-link').href = 'deovr://data:application/json;base64,' + jsonB64;
 }
 
 if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
@@ -192,19 +202,36 @@ function initThree() {
   video.crossOrigin = 'anonymous';
   video.loop = true;
   video.playsInline = true;
+  video.muted = true; // FIX: muted required for autoplay on iOS/Android
   video.setAttribute('webkit-playsinline', '');
   video.addEventListener('loadedmetadata', () => { document.getElementById('tdur').textContent = fmt(video.duration); });
   video.addEventListener('timeupdate', updateProgress);
   video.addEventListener('canplay', onCanPlay, { once: true });
   video.addEventListener('waiting', () => document.getElementById('buffering').classList.add('show'));
-  video.addEventListener('playing', () => document.getElementById('buffering').classList.remove('show'));
+  video.addEventListener('playing', () => {
+    document.getElementById('buffering').classList.remove('show');
+    // Unmute after first play starts (user already interacted via launch button)
+    if (video.muted) {
+      video.muted = false;
+      document.getElementById('vol').value = 1;
+    }
+  });
   video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
 
   if (VIDEO_URL.includes('.m3u8')) {
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = VIDEO_URL;
     } else if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker:true, autoStartLoad:true, maxBufferLength:60, maxMaxBufferLength:120, maxBufferSize:120*1000*1000, abrEwmaDefaultEstimate:8000000, startLevel:-1, capLevelToPlayerSize:false });
+      const hls = new Hls({
+        enableWorker: true,
+        autoStartLoad: true,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 120 * 1000 * 1000,
+        abrEwmaDefaultEstimate: 8000000,
+        startLevel: -1,
+        capLevelToPlayerSize: false
+      });
       hls.loadSource(VIDEO_URL);
       hls.attachMedia(video);
     }
@@ -213,26 +240,70 @@ function initThree() {
     video.load();
   }
 
+  // FIX: Use RGBAFormat instead of deprecated RGBFormat (removed in newer Three.js builds)
   videoTexture = new THREE.VideoTexture(video);
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
-  videoTexture.format = THREE.RGBFormat;
-  const geo = new THREE.SphereGeometry(500, 128, 64);
-  geo.scale(-1, 1, 1);
+  videoTexture.format = THREE.RGBAFormat;
+
+  // FIX: 180° SBS — use only left half of UV (left eye), render on hemisphere
+  // 360° — full sphere as before
+  let geo;
+  if (IS_180) {
+    geo = buildHemi180Geometry();
+  } else {
+    geo = new THREE.SphereGeometry(500, 128, 64);
+    geo.scale(-1, 1, 1);
+  }
+
   scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
-  window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
   animate();
+}
+
+/**
+ * FIX: Build a 180° SBS hemisphere geometry.
+ * - Sphere covers only front 180° (phiStart=PI/2, phiLength=PI)
+ * - UV X remapped to [0, 0.5] so only left eye half of SBS texture is shown
+ * - Flipped inward (normals facing camera inside)
+ */
+function buildHemi180Geometry() {
+  // PhiStart/PhiLength = azimuth (horizontal), ThetaStart/ThetaLength = elevation
+  // Three.js SphereGeometry: phiStart=0 is +X axis, goes around Y
+  // For a front-facing dome we want phi from -PI/2 to +PI/2 (i.e. phiStart=PI/2, phiLength=PI for back hemisphere trick)
+  // Actually we use a full sphere but clamp UV to left half + restrict lon in controls
+  // Best approach: full sphere, remap UV.x to [0, 0.5]
+  const geo = new THREE.SphereGeometry(500, 128, 64);
+  geo.scale(-1, 1, 1); // invert normals
+
+  // Remap UV X: full [0,1] → left half [0, 0.5]
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setX(i, uv.getX(i) * 0.5);
+  }
+  uv.needsUpdate = true;
+  return geo;
 }
 
 function onCanPlay() {
   const ld = document.getElementById('loading');
   ld.classList.add('fade');
-  setTimeout(() => ld.classList.remove('on','fade'), 700);
+  setTimeout(() => ld.classList.remove('on', 'fade'), 700);
   document.getElementById('canvas').classList.add('active');
   document.getElementById('topbar').classList.add('show');
   document.getElementById('hud').classList.add('show');
   playerActive = true;
+  showHint();
   video.play().catch(() => setPPIcon(false));
+}
+
+function showHint() {
+  clearTimeout(hintTimer);
+  document.getElementById('draghint').classList.remove('gone');
   hintTimer = setTimeout(hideHint, 4000);
 }
 
@@ -242,24 +313,42 @@ function animate() {
   lat = Math.max(-85, Math.min(85, lat));
   const phi = THREE.MathUtils.degToRad(90 - lat);
   const theta = THREE.MathUtils.degToRad(lon);
-  camera.lookAt(500*Math.sin(phi)*Math.cos(theta), 500*Math.cos(phi), 500*Math.sin(phi)*Math.sin(theta));
+  camera.lookAt(
+    500 * Math.sin(phi) * Math.cos(theta),
+    500 * Math.cos(phi),
+    500 * Math.sin(phi) * Math.sin(theta)
+  );
   if (videoTexture && video.readyState >= video.HAVE_CURRENT_DATA) videoTexture.needsUpdate = true;
   renderer.render(scene, camera);
 }
 
-// Drag
-window.addEventListener('mousedown', e => { if (!playerActive || e.target.closest('#hud,#topbar')) return; isDragging=true; prevX=e.clientX; prevY=e.clientY; hideHint(); });
+// Drag — mouse
+window.addEventListener('mousedown', e => {
+  if (!playerActive || e.target.closest('#hud,#topbar')) return;
+  isDragging = true; prevX = e.clientX; prevY = e.clientY; hideHint();
+});
 window.addEventListener('mousemove', e => {
   if (!isDragging) return;
-  lon -= (e.clientX-prevX) * .25;
-  lat += (e.clientY-prevY) * .25;
+  lon -= (e.clientX - prevX) * 0.25;
+  lat += (e.clientY - prevY) * 0.25;
   if (IS_180) lon = Math.max(-90, Math.min(90, lon));
-  prevX=e.clientX; prevY=e.clientY;
+  prevX = e.clientX; prevY = e.clientY;
 });
-window.addEventListener('mouseup', () => isDragging=false);
-window.addEventListener('touchstart', e => { if (!playerActive || e.target.closest('#hud,#topbar')) return; if (e.touches.length===1){isDragging=true; prevX=e.touches[0].clientX; prevY=e.touches[0].clientY; hideHint();} }, {passive:true});
-window.addEventListener('touchmove', e => { if (!isDragging || gyroEnabled || e.touches.length!==1) return; lon-=(e.touches[0].clientX-prevX)*.3; lat+=(e.touches[0].clientY-prevY)*.3; prevX=e.touches[0].clientX; prevY=e.touches[0].clientY; }, {passive:true});
-window.addEventListener('touchend', () => isDragging=false);
+window.addEventListener('mouseup', () => isDragging = false);
+
+// Drag — touch
+window.addEventListener('touchstart', e => {
+  if (!playerActive || e.target.closest('#hud,#topbar')) return;
+  if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; hideHint(); }
+}, { passive: true });
+window.addEventListener('touchmove', e => {
+  if (!isDragging || gyroEnabled || e.touches.length !== 1) return;
+  lon -= (e.touches[0].clientX - prevX) * 0.3;
+  lat += (e.touches[0].clientY - prevY) * 0.3;
+  if (IS_180) lon = Math.max(-90, Math.min(90, lon));
+  prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+}, { passive: true });
+window.addEventListener('touchend', () => isDragging = false);
 
 // Gyroscope
 let gyroEnabled = false;
@@ -274,7 +363,7 @@ function toggleGyro() {
     return;
   }
   if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission().then(s => { if (s==='granted') startGyro(); }).catch(console.error);
+    DeviceOrientationEvent.requestPermission().then(s => { if (s === 'granted') startGyro(); }).catch(console.error);
   } else {
     startGyro();
   }
@@ -288,35 +377,53 @@ function startGyro() {
 }
 
 function onGyro(e) {
-  if (!playerActive || !gyroEnabled || (!e.alpha && !e.beta)) return;
+  if (!playerActive || !gyroEnabled) return;
   const alpha = e.alpha || 0;
   const beta  = e.beta  || 0;
   const gamma = e.gamma || 0;
+  if (!alpha && !beta) return;
   if (gyroAlphaOffset === null) gyroAlphaOffset = alpha;
 
+  // FIX: improved orientation handling — portrait vs landscape
   const orient = (window.screen?.orientation?.angle ?? window.orientation) || 0;
   let tLon, tLat;
 
   if (Math.abs(orient) < 45) {
+    // Portrait
     tLon = -(alpha - gyroAlphaOffset);
     tLat = beta - 90;
-  } else {
+  } else if (orient > 0) {
+    // Landscape left (90°)
     tLon = -(alpha - gyroAlphaOffset);
-    tLat = 90 - Math.abs(gamma);
+    tLat = -(gamma);
+  } else {
+    // Landscape right (-90°)
+    tLon = -(alpha - gyroAlphaOffset);
+    tLat = gamma;
   }
 
-  // Smooth lerp — feels natural like YouTube
+  // Smooth lerp
   lon = lon + (tLon - lon) * 0.12;
   lat = lat + (tLat - lat) * 0.12;
-  // Limit rotation for 180° SBS videos
   if (IS_180) lon = Math.max(-90, Math.min(90, lon));
 }
 
-function launch() { document.getElementById('splash').classList.add('hide'); document.getElementById('loading').classList.add('on'); initThree(); }
+function launch() {
+  document.getElementById('splash').classList.add('hide');
+  document.getElementById('loading').classList.add('on');
+  initThree();
+}
+
 function goBack() {
   if (video) video.pause();
-  if (gyroEnabled) { window.removeEventListener('deviceorientation', onGyro, true); gyroEnabled=false; }
-  playerActive=false;
+  // FIX: always clean up gyro on back, reset gyroBtn state
+  if (gyroEnabled) {
+    window.removeEventListener('deviceorientation', onGyro, true);
+    gyroEnabled = false;
+    gyroAlphaOffset = null;
+  }
+  clearTimeout(hintTimer); // FIX: clear hint timer on back
+  playerActive = false;
   document.getElementById('canvas').classList.remove('active');
   document.getElementById('topbar').classList.remove('show');
   document.getElementById('hud').classList.remove('show');
@@ -325,15 +432,41 @@ function goBack() {
   document.getElementById('gyro-btn').classList.remove('active');
   document.getElementById('splash').classList.remove('hide');
 }
-function togglePlay() { if (!video) return; if (video.paused){video.play();setPPIcon(true);}else{video.pause();setPPIcon(false);} }
-function setPPIcon(p) { document.getElementById('ppico').innerHTML=p?'<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>':'<polygon points="5 3 19 12 5 21"/>'; }
-function updateProgress() { if (!video||!video.duration) return; document.getElementById('pfill').style.width=(video.currentTime/video.duration*100)+'%'; document.getElementById('tcur').textContent=fmt(video.currentTime); }
-function seekTo(e) { if (!video||!video.duration) return; const r=document.getElementById('ptrack').getBoundingClientRect(); video.currentTime=((e.clientX-r.left)/r.width)*video.duration; }
-function setVol(v) { if (video) video.volume=v; }
-function toggleMute() { if (!video) return; video.muted=!video.muted; document.getElementById('volico').innerHTML=video.muted?'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>':'<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>'; }
-function toggleFS() { if (!document.fullscreenElement) document.documentElement.requestFullscreen?.(); else document.exitFullscreen?.(); }
+
+function togglePlay() {
+  if (!video) return;
+  if (video.paused) { video.play(); setPPIcon(true); }
+  else { video.pause(); setPPIcon(false); }
+}
+function setPPIcon(p) {
+  document.getElementById('ppico').innerHTML = p
+    ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+    : '<polygon points="5 3 19 12 5 21"/>';
+}
+function updateProgress() {
+  if (!video || !video.duration) return;
+  document.getElementById('pfill').style.width = (video.currentTime / video.duration * 100) + '%';
+  document.getElementById('tcur').textContent = fmt(video.currentTime);
+}
+function seekTo(e) {
+  if (!video || !video.duration) return;
+  const r = document.getElementById('ptrack').getBoundingClientRect();
+  video.currentTime = ((e.clientX - r.left) / r.width) * video.duration;
+}
+function setVol(v) { if (video) { video.volume = v; video.muted = (v == 0); } }
+function toggleMute() {
+  if (!video) return;
+  video.muted = !video.muted;
+  document.getElementById('volico').innerHTML = video.muted
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
+}
+function toggleFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
 function hideHint() { clearTimeout(hintTimer); document.getElementById('draghint').classList.add('gone'); }
-function fmt(s) { if (!s||isNaN(s)) return '0:00'; return Math.floor(s/60)+':'+String(Math.floor(s%60)).padStart(2,'0'); }
+function fmt(s) { if (!s || isNaN(s)) return '0:00'; return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
 </script>
 </body>
 </html>
