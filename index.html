@@ -388,21 +388,28 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => isDragging = false);
 
-// ── Gyroscope (mobile device orientation) ──
+// ── Gyroscope ──
 let gyroEnabled = false;
-let alphaOffset = null;
+let gyroAlphaOffset = null;
 
 function enableGyro() {
+  if (gyroEnabled) {
+    // Toggle OFF
+    window.removeEventListener('deviceorientation', onGyro, true);
+    gyroEnabled = false;
+    gyroAlphaOffset = null;
+    const btn = document.getElementById('gyro-btn');
+    btn.style.color = 'var(--gold)';
+    btn.style.background = 'rgba(212,168,67,.07)';
+    return;
+  }
+
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
-    // iOS 13+ requires permission
     DeviceOrientationEvent.requestPermission()
-      .then(state => {
-        if (state === 'granted') startGyro();
-      })
+      .then(state => { if (state === 'granted') startGyro(); })
       .catch(console.error);
   } else {
-    // Android and older iOS — no permission needed
     startGyro();
   }
 }
@@ -410,23 +417,38 @@ function enableGyro() {
 function startGyro() {
   window.addEventListener('deviceorientation', onGyro, true);
   gyroEnabled = true;
-  document.getElementById('gyro-btn').style.color = 'var(--gold2)';
-  document.getElementById('gyro-btn').style.background = 'rgba(212,168,67,.25)';
+  const btn = document.getElementById('gyro-btn');
+  btn.style.color = 'var(--gold2)';
+  btn.style.background = 'rgba(212,168,67,.25)';
 }
 
 function onGyro(e) {
-  if (!playerActive || !e.alpha) return;
+  if (!playerActive || !gyroEnabled) return;
+  if (!e.alpha && !e.beta) return;
 
-  // Initialize offset on first reading
-  if (alphaOffset === null) alphaOffset = e.alpha;
+  const alpha = e.alpha || 0;
+  const beta  = e.beta  || 0;
+  const gamma = e.gamma || 0;
 
-  const alpha = e.alpha; // Z axis (left/right)
-  const beta  = e.beta;  // X axis (up/down)
-  const gamma = e.gamma; // Y axis (tilt)
+  // Set offset on first reading so current direction = forward
+  if (gyroAlphaOffset === null) {
+    gyroAlphaOffset = alpha;
+  }
 
-  // Portrait mode
-  lon = -(alpha - alphaOffset) * 1.0;
-  lat = beta - 90;
+  // Portrait mode calculation
+  const orient = window.screen?.orientation?.angle || window.orientation || 0;
+
+  if (orient === 0 || orient === 180) {
+    // Portrait
+    lon = gyroAlphaOffset - alpha;
+    lat = beta - 90;
+  } else {
+    // Landscape
+    lon = gyroAlphaOffset - alpha;
+    lat = -(gamma > 0 ? gamma : 90 + gamma);
+  }
+
+  lat = Math.max(-85, Math.min(85, lat));
 }
 
 // ── Controls ──
