@@ -280,8 +280,8 @@ function animate(ts) {
   requestAnimationFrame(animate);
   if (!playerActive) return;
   // Limit to 30fps on mobile to save CPU/GPU
-  if (isMobile && ts - lastFrame < 33) return;
-  lastFrame = ts;
+  if (isMobile && ts && ts - lastFrame < 33) return;
+  if (ts) lastFrame = ts;
   lat = Math.max(-85, Math.min(85, lat));
   const phi = THREE.MathUtils.degToRad(90 - lat);
   const theta = THREE.MathUtils.degToRad(lon);
