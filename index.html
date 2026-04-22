@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>VR KINGS — For Patrons</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Outfit:wght@300;400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#07080b;--gold:#d4a843;--gold2:#f0cc7a;--text:#e2ddd4;--muted:#52504a;--border:rgba(212,168,67,.15);}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;}
+body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;opacity:.3;mix-blend-mode:screen;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='.05'/%3E%3C/svg%3E");}
+
+#canvas{position:fixed;inset:0;z-index:1;display:none;cursor:grab;}
+#canvas:active{cursor:grabbing;}
+#canvas.active{display:block;}
+
+/* SPLASH */
+#splash{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);transition:opacity .9s ease,visibility .9s;}
+#splash.hide{opacity:0;visibility:hidden;pointer-events:none;}
+.glow{position:absolute;bottom:-5%;left:50%;transform:translateX(-50%);width:min(700px,120vw);height:260px;background:radial-gradient(ellipse,rgba(212,168,67,.12) 0%,transparent 70%);pointer-events:none;}
+.splash-inner{position:relative;z-index:1;text-align:center;padding:2rem;animation:rise .9s cubic-bezier(.2,0,.1,1) both;}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.tag{display:inline-flex;align-items:center;gap:.45rem;border:1px solid var(--border);padding:.28rem .95rem;border-radius:99px;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:1.8rem;animation:rise .9s .08s both;}
+.tag svg{width:12px;height:12px;}
+.splash-title{font-family:'Cormorant Garamond',serif;font-size:clamp(2.6rem,8vw,5rem);font-weight:300;line-height:1.05;color:#fff;margin-bottom:.7rem;animation:rise .9s .13s both;}
+.splash-title em{font-style:italic;color:var(--gold2);}
+.splash-sub{font-size:.9rem;font-weight:300;color:var(--muted);line-height:1.75;max-width:320px;margin:0 auto 2.6rem;animation:rise .9s .18s both;}
+.hints{display:flex;align-items:center;justify-content:center;gap:2rem;margin-bottom:2.6rem;animation:rise .9s .23s both;}
+.hint{display:flex;flex-direction:column;align-items:center;gap:.4rem;font-size:.67rem;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;}
+.hico{width:42px;height:42px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gold);}
+.hico svg{width:19px;height:19px;}
+
+/* Buttons */
+.btn-row-splash{display:flex;flex-direction:column;align-items:center;gap:.8rem;animation:rise .9s .28s both;}
+.btn-watch{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid var(--gold);color:var(--gold);font-family:'Outfit',sans-serif;font-size:.88rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:.85rem 2.6rem;border-radius:99px;cursor:pointer;position:relative;overflow:hidden;transition:color .3s;}
+.btn-watch::before{content:'';position:absolute;inset:0;background:var(--gold);transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.4,0,.2,1);}
+.btn-watch:hover::before{transform:scaleX(1);}
+.btn-watch:hover{color:var(--bg);}
+.btn-watch svg,.btn-watch span{position:relative;z-index:1;}
+.btn-watch svg{width:17px;height:17px;}
+.btn-divider{font-size:.65rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
+.btn-deovr{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid rgba(212,168,67,.3);color:var(--muted);font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;padding:.7rem 2.2rem;border-radius:99px;cursor:pointer;transition:border-color .2s,color .2s;text-decoration:none;}
+.btn-deovr:hover{border-color:var(--gold);color:var(--gold);}
+.btn-deovr svg{width:15px;height:15px;}
+.btn-with-desc{display:flex;flex-direction:column;align-items:center;gap:.5rem;width:100%;}
+.btn-desc{font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
+
+/* NO URL */
+#nourl{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);text-align:center;padding:2rem;}
+#nourl.show{display:flex;}
+#nourl h2{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold);margin-bottom:1rem;}
+#nourl p{color:var(--muted);font-size:.9rem;line-height:1.8;max-width:400px;}
+#nourl code{display:block;margin-top:1rem;background:rgba(212,168,67,.08);border:1px solid var(--border);padding:.8rem 1.2rem;border-radius:.5rem;font-size:.8rem;color:var(--gold2);word-break:break-all;}
+
+/* LOADING */
+#loading{position:fixed;inset:0;z-index:150;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;}
+#loading.on{display:flex;}
+#loading.fade{animation:fadeOut .6s forwards;}
+@keyframes fadeOut{to{opacity:0;visibility:hidden;}}
+.ring{width:50px;height:50px;border-radius:50%;border:1.5px solid rgba(212,168,67,.12);border-top-color:var(--gold);animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltxt{font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);}
+
+/* PLAYER */
+#player-ui{position:fixed;inset:0;z-index:10;opacity:0;transition:opacity .8s ease;pointer-events:none;}
+#player-ui.active{opacity:1;pointer-events:all;}
+
+/* BUFFERING */
+#buffering{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:97;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:.6rem;}
+#buffering.show{display:flex;}
+.buf-ring{width:40px;height:40px;border-radius:50%;border:2px solid rgba(212,168,67,.2);border-top-color:var(--gold);animation:spin 1s linear infinite;}
+.buf-txt{font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(212,168,67,.6);}
+
+/* TOPBAR */
+#topbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 1.8rem;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(7,8,11,.85) 0%,transparent 100%);transform:translateY(-110%);transition:transform .5s ease .3s;pointer-events:none;}
+#topbar.show{transform:translateY(0);pointer-events:all;}
+.brand{font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold2);letter-spacing:.06em;display:flex;align-items:center;gap:.5rem;}
+.brand svg{width:14px;height:14px;opacity:.7;}
+.backbtn{background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:.4rem;font-family:'Outfit',sans-serif;font-size:.73rem;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;transition:color .2s;}
+.backbtn:hover{color:var(--gold);}
+.backbtn svg{width:15px;height:15px;}
+.lbadge{font-size:.63rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:.4rem;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* DRAG HINT */
+#draghint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:98;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:.6rem;transition:opacity .5s;}
+#draghint.gone{opacity:0;}
+.dhc{width:58px;height:58px;border-radius:50%;border:1px solid rgba(212,168,67,.22);display:flex;align-items:center;justify-content:center;color:rgba(212,168,67,.45);animation:pulse 2.5s ease-in-out infinite;}
+.dhc svg{width:26px;height:26px;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(212,168,67,.18)}50%{box-shadow:0 0 0 18px rgba(212,168,67,0)}}
+.dhl{font-size:.63rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(212,168,67,.38);}
+
+/* HUD */
+#hud{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 1.8rem 1.4rem;background:linear-gradient(to top,rgba(7,8,11,.9) 0%,transparent 100%);transform:translateY(110%);transition:transform .5s ease .3s;pointer-events:none;}
+#hud.show{transform:translateY(0);pointer-events:all;}
+.ptrack{width:100%;height:3px;background:rgba(255,255,255,.08);border-radius:2px;cursor:pointer;margin-bottom:1rem;transition:height .15s,margin-top .15s;}
+.ptrack:hover{height:5px;margin-top:-2px;}
+.pfill{height:100%;border-radius:2px;width:0%;background:linear-gradient(90deg,var(--gold),var(--gold2));pointer-events:none;transition:width .25s linear;}
+.ctrlrow{display:flex;align-items:center;gap:.7rem;}
+.cb{background:rgba(212,168,67,.07);border:1px solid rgba(212,168,67,.17);color:var(--gold);width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .2s,transform .15s;}
+.cb:hover{background:rgba(212,168,67,.2);transform:scale(1.08);}
+.cb svg{width:15px;height:15px;}
+.tbox{font-size:.77rem;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap;}
+.tbox b{color:var(--text);font-weight:400;}
+.sp{flex:1;}
+.vrow{display:flex;align-items:center;gap:.45rem;}
+input#vol{-webkit-appearance:none;appearance:none;width:68px;height:2px;background:rgba(255,255,255,.14);outline:none;cursor:pointer;border-radius:2px;}
+input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--gold);cursor:pointer;}
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- NO URL -->
+<div id="nourl">
+  <h2>No video link</h2>
+  <p>Add a video link to the URL like this:</p>
+  <code id="example-url"></code>
+</div>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="glow"></div>
+  <div class="splash-inner">
+    <div class="tag">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+      VR KINGS
+    </div>
+    <h1 class="splash-title">Step Inside<br/><em>the 360°</em></h1>
+    <p class="splash-sub">Exclusive 360° content<br/>for VR KINGS Patrons only.</p>
+    <div class="hints">
+      <div class="hint">
+        <div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/></svg></div>
+        Drag mouse
+      </div>
+      <div class="hint">
+        <div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></div>
+        Swipe on phone
+      </div>
+      <div class="hint">
+        <div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg></div>
+        VR mode
+      </div>
+    </div>
+    <div class="btn-row-splash">
+      <div class="btn-with-desc">
+        <button class="btn-watch" onclick="launch()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+          <span>Watch in Browser</span>
+        </button>
+        <div class="btn-desc">💻 Computer &amp; phone — no app needed</div>
+      </div>
+      <div class="btn-divider">or</div>
+      <div class="btn-with-desc">
+        <a class="btn-deovr" id="deovr-link" href="#" target="_blank">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>
+          Open in DeoVR
+        </a>
+        <div class="btn-desc">🥽 VR headset — best quality, full immersion</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LOADING -->
+<div id="loading">
+  <div class="ring"></div>
+  <div class="ltxt">Loading…</div>
+</div>
+
+<!-- PLAYER UI (canvas is separate) -->
+<div id="player-ui"></div>
+
+<!-- BUFFERING -->
+<div id="buffering">
+  <div class="buf-ring"></div>
+  <div class="buf-txt">Loading…</div>
+</div>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <button class="backbtn" onclick="goBack()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+    Back
+  </button>
+  <div class="brand">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
+    VR KINGS — For Patrons
+  </div>
+  <div class="lbadge"><span class="dot"></span>Patreon</div>
+</div>
+
+<!-- DRAG HINT -->
+<div id="draghint">
+  <div class="dhc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/></svg></div>
+  <div class="dhl">Drag to look around</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="ptrack" id="ptrack" onclick="seekTo(event)"><div class="pfill" id="pfill"></div></div>
+  <div class="ctrlrow">
+    <button class="cb" onclick="togglePlay()">
+      <svg id="ppico" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+    </button>
+    <div class="tbox"><b id="tcur">0:00</b> / <span id="tdur">0:00</span></div>
+    <div class="sp"></div>
+    <div class="vrow">
+      <button class="cb" onclick="toggleMute()">
+        <svg id="volico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+        </svg>
+      </button>
+      <input type="range" id="vol" min="0" max="1" step="0.05" value="1" oninput="setVol(this.value)">
+    </div>
+    <button class="cb" onclick="toggleFS()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+        <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ── Get video URL from ?v= ──
+function getVideoURL() {
+  const params = new URLSearchParams(window.location.search);
+  let url = params.get('v');
+  if (!url) return null;
+  if (url.includes('.m3u8') || url.includes('b-cdn.net')) return url;
+  url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+  url = url.replace('?dl=0', '?dl=1').replace('&dl=0', '&dl=1');
+  if (!url.includes('dl=1') && !url.includes('raw=1')) {
+    url += (url.includes('?') ? '&' : '?') + 'dl=1';
+  }
+  return url;
+}
+
+const VIDEO_URL = getVideoURL();
+
+if (!VIDEO_URL) {
+  document.getElementById('nourl').classList.add('show');
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('example-url').textContent =
+    window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
+} else {
+  const deoLink = document.getElementById('deovr-link');
+  if (deoLink) deoLink.href = 'deovr://play?url=' + encodeURIComponent(VIDEO_URL);
+}
+
+// ── Three.js ──
+let renderer, scene, camera, videoTexture, video;
+let lon = 0, lat = 0;
+let isDragging = false, prevX = 0, prevY = 0;
+let hintTimer, playerActive = false;
+
+function initThree() {
+  const canvas = document.getElementById('canvas');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+  video = document.createElement('video');
+  video.crossOrigin = 'anonymous';
+  video.loop = true;
+  video.playsInline = true;
+  video.setAttribute('webkit-playsinline', '');
+  video.addEventListener('loadedmetadata', () => {
+    document.getElementById('tdur').textContent = fmt(video.duration);
+  });
+  video.addEventListener('timeupdate', updateProgress);
+  video.addEventListener('canplay', onCanPlay, { once: true });
+  video.addEventListener('waiting', () => document.getElementById('buffering').classList.add('show'));
+  video.addEventListener('playing', () => document.getElementById('buffering').classList.remove('show'));
+  video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
+
+  // HLS or direct
+  if (VIDEO_URL.includes('.m3u8')) {
+    if (Hls.isSupported()) {
+      const hls = new Hls({
+        enableWorker: true,
+        autoStartLoad: true,
+        maxBufferLength: 30,
+        maxMaxBufferLength: 60,
+        maxBufferSize: 60 * 1000 * 1000,
+        abrEwmaDefaultEstimate: 5000000,
+        startLevel: -1,
+        abrEwmaDefaultEstimate: 8000000,
+        capLevelToPlayerSize: false,
+      });
+      hls.loadSource(VIDEO_URL);
+      hls.attachMedia(video);
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = VIDEO_URL;
+    }
+  } else {
+    video.src = VIDEO_URL;
+    video.load();
+  }
+
+  videoTexture = new THREE.VideoTexture(video);
+  videoTexture.minFilter = THREE.LinearFilter;
+  videoTexture.magFilter = THREE.LinearFilter;
+  videoTexture.format = THREE.RGBFormat;
+
+  const geo = new THREE.SphereGeometry(500, 128, 64);
+  geo.scale(-1, 1, 1);
+  scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  animate();
+}
+
+function onCanPlay() {
+  const ld = document.getElementById('loading');
+  ld.classList.add('fade');
+  setTimeout(() => ld.classList.remove('on', 'fade'), 700);
+  document.getElementById('canvas').classList.add('active');
+  document.getElementById('player-ui').classList.add('active');
+  document.getElementById('topbar').classList.add('show');
+  document.getElementById('hud').classList.add('show');
+  playerActive = true;
+  video.play().catch(() => setPPIcon(false));
+  hintTimer = setTimeout(hideHint, 4000);
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  if (!playerActive) return;
+  lat = Math.max(-85, Math.min(85, lat));
+  const phi = THREE.MathUtils.degToRad(90 - lat);
+  const theta = THREE.MathUtils.degToRad(lon);
+  camera.lookAt(
+    500 * Math.sin(phi) * Math.cos(theta),
+    500 * Math.cos(phi),
+    500 * Math.sin(phi) * Math.sin(theta)
+  );
+  if (videoTexture && video.readyState >= video.HAVE_CURRENT_DATA) videoTexture.needsUpdate = true;
+  renderer.render(scene, camera);
+}
+
+// ── Drag ──
+window.addEventListener('mousedown', e => {
+  if (!playerActive) return;
+  if (e.target.closest('#hud, #topbar')) return;
+  isDragging = true; prevX = e.clientX; prevY = e.clientY; hideHint();
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  lon -= (e.clientX - prevX) * 0.25;
+  lat += (e.clientY - prevY) * 0.25;
+  prevX = e.clientX; prevY = e.clientY;
+});
+window.addEventListener('mouseup', () => isDragging = false);
+window.addEventListener('touchstart', e => {
+  if (!playerActive) return;
+  if (e.target.closest('#hud, #topbar')) return;
+  if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; hideHint(); }
+}, { passive: true });
+window.addEventListener('touchmove', e => {
+  if (!isDragging || e.touches.length !== 1) return;
+  lon -= (e.touches[0].clientX - prevX) * 0.3;
+  lat += (e.touches[0].clientY - prevY) * 0.3;
+  prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+}, { passive: true });
+window.addEventListener('touchend', () => isDragging = false);
+
+// ── Controls ──
+function launch() {
+  document.getElementById('splash').classList.add('hide');
+  document.getElementById('loading').classList.add('on');
+  initThree();
+}
+
+function goBack() {
+  if (video) video.pause();
+  playerActive = false;
+  document.getElementById('canvas').classList.remove('active');
+  document.getElementById('player-ui').classList.remove('active');
+  document.getElementById('topbar').classList.remove('show');
+  document.getElementById('hud').classList.remove('show');
+  document.getElementById('draghint').classList.remove('gone');
+  document.getElementById('buffering').classList.remove('show');
+  document.getElementById('splash').classList.remove('hide');
+}
+
+function togglePlay() {
+  if (!video) return;
+  if (video.paused) { video.play(); setPPIcon(true); }
+  else { video.pause(); setPPIcon(false); }
+}
+
+function setPPIcon(p) {
+  document.getElementById('ppico').innerHTML = p
+    ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+    : '<polygon points="5 3 19 12 5 21"/>';
+}
+
+function updateProgress() {
+  if (!video || !video.duration) return;
+  document.getElementById('pfill').style.width = (video.currentTime / video.duration * 100) + '%';
+  document.getElementById('tcur').textContent = fmt(video.currentTime);
+}
+
+function seekTo(e) {
+  if (!video || !video.duration) return;
+  const r = document.getElementById('ptrack').getBoundingClientRect();
+  video.currentTime = ((e.clientX - r.left) / r.width) * video.duration;
+}
+
+function setVol(v) { if (video) video.volume = v; }
+
+function toggleMute() {
+  if (!video) return;
+  video.muted = !video.muted;
+  document.getElementById('volico').innerHTML = video.muted
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
+}
+
+function toggleFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+
+function hideHint() { clearTimeout(hintTimer); document.getElementById('draghint').classList.add('gone'); }
+
+function fmt(s) {
+  if (!s || isNaN(s)) return '0:00';
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+}
+</script>
+</body>
+</html>
