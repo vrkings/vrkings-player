@@ -183,9 +183,7 @@ let hintTimer, playerActive = false;
 function initThree() {
   const canvas = document.getElementById('canvas');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  const maxDPR = isSafari ? 1.5 : 2;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDPR));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -206,22 +204,7 @@ function initThree() {
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
       video.src = VIDEO_URL;
     } else if (Hls.isSupported()) {
-      const isAndroid = /Android/i.test(navigator.userAgent);
-      const hls = new Hls({
-        enableWorker: true,
-        autoStartLoad: true,
-        // Android needs smaller buffer to avoid stuttering
-        maxBufferLength: isAndroid ? 20 : 40,
-        maxMaxBufferLength: isAndroid ? 40 : 80,
-        maxBufferSize: isAndroid ? 30*1000*1000 : 80*1000*1000,
-        abrEwmaDefaultEstimate: isAndroid ? 4000000 : 8000000,
-        abrBandWidthFactor: 0.85,
-        startLevel: -1,
-        capLevelToPlayerSize: false,
-        // Reduce memory pressure on Android
-        maxFragLookUpTolerance: 0.25,
-        nudgeMaxRetry: 5,
-      });
+      const hls = new Hls({ enableWorker:true, autoStartLoad:true, maxBufferLength:60, maxMaxBufferLength:120, maxBufferSize:120*1000*1000, abrEwmaDefaultEstimate:8000000, startLevel:-1, capLevelToPlayerSize:false });
       hls.loadSource(VIDEO_URL);
       hls.attachMedia(video);
     }
@@ -234,9 +217,7 @@ function initThree() {
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
   videoTexture.format = THREE.RGBFormat;
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  const segments = isMobile ? 64 : 128;
-  const geo = new THREE.SphereGeometry(500, segments, segments/2);
+  const geo = new THREE.SphereGeometry(500, 128, 64);
   geo.scale(-1, 1, 1);
   scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
   window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
@@ -255,14 +236,9 @@ function onCanPlay() {
   hintTimer = setTimeout(hideHint, 4000);
 }
 
-let lastFrame = 0;
-function animate(ts) {
+function animate() {
   requestAnimationFrame(animate);
   if (!playerActive) return;
-  // On mobile limit to 30fps to save CPU/GPU
-  const fpsLimit = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 30 : 60;
-  if (ts - lastFrame < 1000/fpsLimit) return;
-  lastFrame = ts;
   lat = Math.max(-85, Math.min(85, lat));
   const phi = THREE.MathUtils.degToRad(90 - lat);
   const theta = THREE.MathUtils.degToRad(lon);
