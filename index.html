@@ -168,7 +168,24 @@ if (!VIDEO_URL) {
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 } else {
-  document.getElementById('deovr-link').href = 'deovr://play?url=' + encodeURIComponent(VIDEO_URL);
+  // Generate proper DeoVR JSON deeplink based on video type
+  const screenType = IS_180 ? 'dome' : 'sphere';
+  const stereoMode = IS_180 ? 'sbs' : 'off';
+  const deoJson = {
+    title: 'VR KINGS',
+    id: 1,
+    is3d: IS_180,
+    screenType: screenType,
+    stereoMode: stereoMode,
+    skipIntro: 0,
+    encodings: [{
+      name: 'hls',
+      videoSources: [{ resolution: 2700, url: VIDEO_URL }]
+    }]
+  };
+  const jsonStr = JSON.stringify(deoJson);
+  const jsonB64 = btoa(unescape(encodeURIComponent(jsonStr)));
+  document.getElementById('deovr-link').href = 'deovr://data:application/json;base64,' + jsonB64;
 }
 
 if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
@@ -183,9 +200,7 @@ let hintTimer, playerActive = false;
 function initThree() {
   const canvas = document.getElementById('canvas');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-  const maxDPR = isSafari ? 1.5 : 2;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxDPR));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -210,17 +225,21 @@ function initThree() {
       const hls = new Hls({
         enableWorker: true,
         autoStartLoad: true,
-        // Android needs smaller buffer to avoid stuttering
-        maxBufferLength: isAndroid ? 20 : 40,
-        maxMaxBufferLength: isAndroid ? 40 : 80,
-        maxBufferSize: isAndroid ? 30*1000*1000 : 80*1000*1000,
-        abrEwmaDefaultEstimate: isAndroid ? 4000000 : 8000000,
-        abrBandWidthFactor: 0.85,
+        // Smaller buffer on Android to avoid memory issues
+        maxBufferLength: isAndroid ? 25 : 40,
+        maxMaxBufferLength: isAndroid ? 50 : 80,
+        maxBufferSize: isAndroid ? 50*1000*1000 : 80*1000*1000,
+        // Start at highest quality, drop only if connection is too slow
+        abrEwmaDefaultEstimate: 8000000,
+        abrBandWidthFactor: 0.9,
+        abrBandWidthUpFactor: 0.7,
         startLevel: -1,
         capLevelToPlayerSize: false,
-        // Reduce memory pressure on Android
-        maxFragLookUpTolerance: 0.25,
         nudgeMaxRetry: 5,
+      });
+      // Jump to highest quality after manifest loads
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        hls.startLevel = hls.levels.length - 1;
       });
       hls.loadSource(VIDEO_URL);
       hls.attachMedia(video);
@@ -234,9 +253,7 @@ function initThree() {
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
   videoTexture.format = THREE.RGBFormat;
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  const segments = isMobile ? 64 : 128;
-  const geo = new THREE.SphereGeometry(500, segments, segments/2);
+  const geo = new THREE.SphereGeometry(500, 128, 64);
   geo.scale(-1, 1, 1);
   scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
   window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
@@ -255,14 +272,9 @@ function onCanPlay() {
   hintTimer = setTimeout(hideHint, 4000);
 }
 
-let lastFrame = 0;
-function animate(ts) {
+function animate() {
   requestAnimationFrame(animate);
   if (!playerActive) return;
-  // On mobile limit to 30fps to save CPU/GPU
-  const fpsLimit = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) ? 30 : 60;
-  if (ts - lastFrame < 1000/fpsLimit) return;
-  lastFrame = ts;
   lat = Math.max(-85, Math.min(85, lat));
   const phi = THREE.MathUtils.degToRad(90 - lat);
   const theta = THREE.MathUtils.degToRad(lon);
