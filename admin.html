@@ -9,105 +9,93 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{--bg:#07080b;--surface:#0e0f15;--gold:#d4a843;--gold2:#f0cc7a;--text:#e2ddd4;--muted:#52504a;--border:rgba(212,168,67,.15);--green:#4caf7d;}
 html,body{min-height:100%;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;}
-
 .glow{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:800px;height:300px;background:radial-gradient(ellipse,rgba(212,168,67,.07) 0%,transparent 70%);pointer-events:none;z-index:0;}
-
 .wrap{position:relative;z-index:1;max-width:680px;margin:0 auto;padding:3rem 1.5rem 4rem;}
-
-/* header */
 .header{display:flex;align-items:center;gap:.8rem;margin-bottom:3rem;}
 .logo{width:38px;height:38px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gold);}
 .logo svg{width:18px;height:18px;}
 .htext h1{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:600;color:var(--gold2);}
 .htext p{font-size:.75rem;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;}
-
-/* card */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:2rem;margin-bottom:1.5rem;}
 .card-title{font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--gold);margin-bottom:1.2rem;display:flex;align-items:center;gap:.5rem;}
 .card-title svg{width:14px;height:14px;}
-
 label{display:block;font-size:.8rem;color:var(--muted);margin-bottom:.5rem;}
-
-input[type=text],input[type=url]{
-  width:100%;background:rgba(255,255,255,.04);
-  border:1px solid rgba(212,168,67,.2);border-radius:8px;
-  padding:.75rem 1rem;color:var(--text);font-family:'Outfit',sans-serif;font-size:.88rem;
-  outline:none;transition:border-color .2s;
-}
+input[type=text],input[type=url]{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(212,168,67,.2);border-radius:8px;padding:.75rem 1rem;color:var(--text);font-family:'Outfit',sans-serif;font-size:.88rem;outline:none;transition:border-color .2s;}
 input[type=text]:focus,input[type=url]:focus{border-color:rgba(212,168,67,.5);}
 input::placeholder{color:var(--muted);}
-
 .field{margin-bottom:1.2rem;}
 .field:last-child{margin-bottom:0;}
-
-/* base url display */
-.base-url-box{
-  background:rgba(212,168,67,.06);border:1px solid var(--border);
-  border-radius:8px;padding:.7rem 1rem;
-  font-size:.8rem;color:var(--muted);word-break:break-all;
-}
+.base-url-box{background:rgba(212,168,67,.06);border:1px solid var(--border);border-radius:8px;padding:.7rem 1rem;font-size:.8rem;color:var(--muted);word-break:break-all;}
 .base-url-box b{color:var(--gold2);}
 
-/* generate btn */
-.btn-gen{
-  width:100%;padding:1rem;border-radius:8px;
-  background:linear-gradient(135deg,var(--gold),var(--gold2));
-  color:var(--bg);font-family:'Outfit',sans-serif;
-  font-size:.9rem;font-weight:600;letter-spacing:.06em;
-  border:none;cursor:pointer;
-  transition:opacity .2s,transform .15s;
-  margin-top:1.5rem;
+/* Video type selector */
+.type-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.5rem;}
+.type-btn{
+  padding:.9rem 1rem;border-radius:10px;
+  border:1px solid rgba(212,168,67,.2);
+  background:rgba(255,255,255,.03);
+  cursor:pointer;transition:all .2s;text-align:left;
 }
+.type-btn:hover{border-color:rgba(212,168,67,.4);background:rgba(212,168,67,.06);}
+.type-btn.selected{border-color:var(--gold);background:rgba(212,168,67,.12);}
+.type-btn .type-icon{font-size:1.4rem;margin-bottom:.4rem;}
+.type-btn .type-name{font-size:.82rem;font-weight:500;color:var(--text);margin-bottom:.2rem;}
+.type-btn .type-desc{font-size:.7rem;color:var(--muted);line-height:1.4;}
+
+/* Generate btn */
+.btn-gen{width:100%;padding:1rem;border-radius:8px;background:linear-gradient(135deg,var(--gold),var(--gold2));color:var(--bg);font-family:'Outfit',sans-serif;font-size:.9rem;font-weight:600;letter-spacing:.06em;border:none;cursor:pointer;transition:opacity .2s,transform .15s;margin-top:1.5rem;}
 .btn-gen:hover{opacity:.9;transform:translateY(-1px);}
 .btn-gen:active{transform:translateY(0);}
+.btn-gen:disabled{opacity:.4;cursor:not-allowed;transform:none;}
 
-/* result */
+/* Result */
 #result{display:none;margin-top:1.5rem;}
 #result.show{display:block;}
 
-.result-card{
-  background:rgba(76,175,125,.07);
-  border:1px solid rgba(76,175,125,.25);
-  border-radius:12px;padding:1.5rem;
+/* Result cards for each platform */
+.result-section{margin-bottom:1.2rem;}
+.result-platform{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;overflow:hidden;
 }
-.result-label{font-size:.68rem;letter-spacing:.16em;text-transform:uppercase;color:var(--green);margin-bottom:.8rem;display:flex;align-items:center;gap:.4rem;}
-.result-label svg{width:14px;height:14px;}
-
-.result-url{
-  background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.08);
-  border-radius:8px;padding:.9rem 1rem;
-  font-size:.82rem;color:var(--text);
-  word-break:break-all;line-height:1.6;
-  margin-bottom:1rem;
+.result-platform-header{
+  display:flex;align-items:center;gap:.7rem;
+  padding:.9rem 1.2rem;
+  border-bottom:1px solid var(--border);
+  font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;
 }
-.result-url b{color:var(--gold2);}
+.result-platform-header .pico{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.9rem;}
+.result-platform-body{padding:1rem 1.2rem;}
+.result-url{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:.8rem 1rem;font-size:.75rem;color:var(--text);word-break:break-all;line-height:1.6;margin-bottom:.8rem;font-family:monospace;}
 
-.btn-row{display:flex;gap:.8rem;flex-wrap:wrap;}
+.btn-row{display:flex;gap:.6rem;flex-wrap:wrap;}
+.btn-copy,.btn-open{flex:1;min-width:100px;padding:.6rem .8rem;border-radius:8px;font-family:'Outfit',sans-serif;font-size:.78rem;font-weight:500;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:.35rem;text-decoration:none;white-space:nowrap;}
+.btn-copy{background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.25);color:var(--gold);}
+.btn-copy:hover{background:rgba(212,168,67,.2);}
+.btn-open{background:rgba(76,175,125,.1);border:1px solid rgba(76,175,125,.25);color:var(--green);}
+.btn-open:hover{background:rgba(76,175,125,.2);}
+.btn-copy svg,.btn-open svg{width:13px;height:13px;}
+.copied{color:#fff!important;background:rgba(212,168,67,.3)!important;}
 
-.btn-copy,.btn-open{
-  flex:1;min-width:120px;
-  padding:.7rem 1rem;border-radius:8px;
-  font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:500;
-  cursor:pointer;transition:all .2s;
-  display:flex;align-items:center;justify-content:center;gap:.4rem;
-  text-decoration:none;
-}
-.btn-copy{background:rgba(212,168,67,.12);border:1px solid rgba(212,168,67,.3);color:var(--gold);}
-.btn-copy:hover{background:rgba(212,168,67,.22);}
-.btn-open{background:rgba(76,175,125,.12);border:1px solid rgba(76,175,125,.3);color:var(--green);}
-.btn-open:hover{background:rgba(76,175,125,.22);}
-.btn-copy svg,.btn-open svg{width:14px;height:14px;}
+/* Platform colors */
+.plat-browser{color:#60a5fa;}
+.plat-browser .pico{background:rgba(96,165,250,.15);}
+.plat-phone{color:#a78bfa;}
+.plat-phone .pico{background:rgba(167,139,250,.15);}
+.plat-vr{color:var(--gold);}
+.plat-vr .pico{background:rgba(212,168,67,.15);}
 
-.copied{color:#fff!important;background:rgba(212,168,67,.35)!important;}
-
-/* instructions */
-.steps{list-style:none;counter-reset:steps;}
-.steps li{counter-increment:steps;display:flex;gap:1rem;padding:.9rem 0;border-bottom:1px solid rgba(255,255,255,.05);}
+/* Steps */
+.steps{list-style:none;}
+.steps li{display:flex;gap:1rem;padding:.85rem 0;border-bottom:1px solid rgba(255,255,255,.05);}
 .steps li:last-child{border-bottom:none;}
-.step-num{flex-shrink:0;width:26px;height:26px;border-radius:50%;background:rgba(212,168,67,.12);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.72rem;color:var(--gold);font-weight:500;}
-.step-text{font-size:.85rem;color:var(--muted);line-height:1.6;padding-top:.2rem;}
+.step-num{flex-shrink:0;width:24px;height:24px;border-radius:50%;background:rgba(212,168,67,.12);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--gold);font-weight:500;}
+.step-text{font-size:.83rem;color:var(--muted);line-height:1.6;padding-top:.1rem;}
 .step-text b{color:var(--text);}
-.step-text code{background:rgba(212,168,67,.1);border-radius:4px;padding:.1rem .4rem;font-size:.78rem;color:var(--gold2);}
+
+/* Warning */
+.warn{background:rgba(212,168,67,.06);border:1px solid rgba(212,168,67,.2);border-radius:8px;padding:.7rem 1rem;font-size:.78rem;color:var(--muted);margin-top:.8rem;line-height:1.5;}
+.warn b{color:var(--gold);}
 </style>
 </head>
 <body>
@@ -117,10 +105,7 @@ input::placeholder{color:var(--muted);}
   <!-- Header -->
   <div class="header">
     <div class="logo">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <circle cx="12" cy="12" r="10"/>
-        <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/>
-      </svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>
     </div>
     <div class="htext">
       <h1>VR KINGS Admin</h1>
@@ -135,51 +120,133 @@ input::placeholder{color:var(--muted);}
       Step 1 — Your Player URL (set once)
     </div>
     <div class="field">
-      <label>Your Netlify player URL</label>
-      <input type="url" id="base-url" placeholder="https://your-site.netlify.app" oninput="saveBase()"/>
+      <label>Your GitHub Pages URL</label>
+      <input type="url" id="base-url" placeholder="https://vrkings.github.io/vrkings-player" oninput="saveBase()"/>
     </div>
-    <div class="base-url-box" id="base-preview">Enter your Netlify URL above ↑</div>
+    <div class="base-url-box" id="base-preview">Enter your GitHub Pages URL above ↑</div>
   </div>
 
-  <!-- Step 2: Dropbox link -->
+  <!-- Step 2: Video details -->
   <div class="card">
     <div class="card-title">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Step 2 — Paste Dropbox Link
+      Step 2 — Video Details
     </div>
+
     <div class="field">
-      <label>Dropbox share link (any format — auto-fixed)</label>
-      <input type="url" id="dropbox-url" placeholder="https://www.dropbox.com/scl/fi/..." oninput="generate()"/>
+      <label>Bunny HLS URL (playlist.m3u8)</label>
+      <input type="url" id="video-url" placeholder="https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8" oninput="generate()"/>
     </div>
+
     <div class="field">
-      <label>Video title (optional — for your notes)</label>
+      <label>Video title (shown in DeoVR)</label>
       <input type="text" id="title" placeholder="e.g. Yoga Flow Vol.3" oninput="generate()"/>
     </div>
 
-    <button class="btn-gen" onclick="generate()">
-      ⚡ Generate Patron Link
+    <div class="field">
+      <label>Video type — choose one:</label>
+      <div class="type-grid">
+        <button class="type-btn selected" id="type-180" onclick="selectType('180')">
+          <div class="type-icon">🔮</div>
+          <div class="type-name">180° SBS</div>
+          <div class="type-desc">Side-by-side, half sphere. Your standard VR format.</div>
+        </button>
+        <button class="type-btn" id="type-360" onclick="selectType('360')">
+          <div class="type-icon">🌐</div>
+          <div class="type-name">360° Mono</div>
+          <div class="type-desc">Full sphere, single eye. Standard 360 video.</div>
+        </button>
+      </div>
+    </div>
+
+    <button class="btn-gen" id="gen-btn" onclick="generate()" disabled>
+      ⚡ Generate All Links
     </button>
   </div>
 
   <!-- Result -->
   <div id="result">
-    <div class="result-card">
-      <div class="result-label">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-        Ready — copy this link for Patreon
-      </div>
-      <div class="result-url" id="result-url"></div>
-      <div class="btn-row">
-        <button class="btn-copy" id="copybtn" onclick="copyLink()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          Copy Link
-        </button>
-        <a class="btn-open" id="open-link" href="#" target="_blank">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-          Test in Browser
-        </a>
+
+    <!-- Browser -->
+    <div class="result-section">
+      <div class="result-platform">
+        <div class="result-platform-header plat-browser">
+          <div class="pico">💻</div>
+          <div>
+            <div style="font-weight:500;color:#60a5fa">Browser (Desktop)</div>
+            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">Paste into Patreon post</div>
+          </div>
+        </div>
+        <div class="result-platform-body">
+          <div class="result-url" id="url-browser">—</div>
+          <div class="btn-row">
+            <button class="btn-copy" id="copy-browser" onclick="copyUrl('browser')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy Link
+            </button>
+            <a class="btn-open" id="open-browser" href="#" target="_blank">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Test
+            </a>
+          </div>
+        </div>
       </div>
     </div>
+
+    <!-- Phone -->
+    <div class="result-section">
+      <div class="result-platform">
+        <div class="result-platform-header plat-phone">
+          <div class="pico">📱</div>
+          <div>
+            <div style="font-weight:500;color:#a78bfa">Phone (same link as browser)</div>
+            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">Works on iPhone & Android — same URL</div>
+          </div>
+        </div>
+        <div class="result-platform-body">
+          <div class="warn">📱 Phone uses the <b>same link</b> as Browser above. The player auto-detects mobile and shows swipe + gyroscope controls.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- VR Headset -->
+    <div class="result-section">
+      <div class="result-platform">
+        <div class="result-platform-header plat-vr">
+          <div class="pico">🥽</div>
+          <div>
+            <div style="font-weight:500;color:var(--gold)">VR Headset (DeoVR)</div>
+            <div style="font-size:.65rem;color:var(--muted);margin-top:.1rem">Opens directly in DeoVR app with correct settings</div>
+          </div>
+        </div>
+        <div class="result-platform-body">
+          <div class="result-url" id="url-deovr">—</div>
+          <div class="btn-row">
+            <button class="btn-copy" id="copy-deovr" onclick="copyUrl('deovr')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Copy DeoVR Link
+            </button>
+          </div>
+          <div class="warn" style="margin-top:.8rem">🥽 This link opens <b>DeoVR app directly</b> on the headset with correct 180°/360° settings, stereo mode and full quality. Patron taps the link on their headset browser — DeoVR opens automatically.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- JSON preview -->
+    <div class="card" style="margin-top:.5rem;">
+      <div class="card-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        DeoVR JSON (auto-generated)
+      </div>
+      <div class="result-url" id="json-preview" style="font-size:.7rem;max-height:200px;overflow-y:auto;white-space:pre;">—</div>
+      <div class="btn-row" style="margin-top:.8rem;">
+        <button class="btn-copy" onclick="copyJson()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy JSON
+        </button>
+      </div>
+    </div>
+
   </div>
 
   <!-- How to use -->
@@ -189,35 +256,25 @@ input::placeholder{color:var(--muted);}
       How to use every time
     </div>
     <ol class="steps">
-      <li>
-        <div class="step-num">1</div>
-        <div class="step-text">Upload your 360° video to <b>Dropbox</b> as usual</div>
-      </li>
-      <li>
-        <div class="step-num">2</div>
-        <div class="step-text">Click <b>Share</b> on the file → <b>Copy link</b></div>
-      </li>
-      <li>
-        <div class="step-num">3</div>
-        <div class="step-text">Paste the link here → click <b>Generate</b></div>
-      </li>
-      <li>
-        <div class="step-num">4</div>
-        <div class="step-text">Copy the result and paste it into your <b>Patreon post</b> — done! ✓</div>
-      </li>
+      <li><div class="step-num">1</div><div class="step-text">Upload video to <b>Bunny Stream</b> → copy <b>HLS Playlist URL</b></div></li>
+      <li><div class="step-num">2</div><div class="step-text">Paste URL here, choose <b>180° SBS</b> or <b>360°</b>, add title → <b>Generate</b></div></li>
+      <li><div class="step-num">3</div><div class="step-text">In Patreon post paste <b>Browser link</b> — works for desktop + phone</div></li>
+      <li><div class="step-num">4</div><div class="step-text">Add separately <b>DeoVR link</b> for VR headset users with label "🥽 Open in DeoVR"</div></li>
     </ol>
   </div>
 
 </div>
 
 <script>
-// Load saved base URL
+let currentType = '180';
+let currentBrowserUrl = '';
+let currentDeovrUrl = '';
+let currentJson = '';
+
 window.addEventListener('load', () => {
   const saved = localStorage.getItem('vrkings_base');
-  if (saved) {
-    document.getElementById('base-url').value = saved;
-    updatePreview(saved);
-  }
+  if (saved) { document.getElementById('base-url').value = saved; updatePreview(saved); }
+  checkGenBtn();
 });
 
 function saveBase() {
@@ -225,65 +282,98 @@ function saveBase() {
   localStorage.setItem('vrkings_base', val);
   updatePreview(val);
   generate();
+  checkGenBtn();
 }
 
 function updatePreview(url) {
   const el = document.getElementById('base-preview');
-  if (url) {
-    el.innerHTML = `Player URL: <b>${url}</b>`;
-  } else {
-    el.textContent = 'Enter your Netlify URL above ↑';
-  }
+  el.innerHTML = url ? `Player URL: <b>${url}</b>` : 'Enter your GitHub Pages URL above ↑';
 }
 
-function fixDropbox(url) {
-  if (!url) return '';
-  // Bunny HLS — don't touch
-  if (url.includes('.m3u8') || url.includes('b-cdn.net')) return url;
-  // Convert www.dropbox.com → dl.dropboxusercontent.com
-  url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
-  // Fix dl=0 → dl=1
-  url = url.replace('?dl=0', '?dl=1').replace('&dl=0', '&dl=1');
-  // Add dl=1 if missing
-  if (!url.includes('dl=1') && !url.includes('raw=1')) {
-    url += (url.includes('?') ? '&' : '?') + 'dl=1';
-  }
-  return url;
+function selectType(type) {
+  currentType = type;
+  document.getElementById('type-180').classList.toggle('selected', type === '180');
+  document.getElementById('type-360').classList.toggle('selected', type === '360');
+  generate();
+}
+
+function checkGenBtn() {
+  const base = document.getElementById('base-url').value.trim();
+  const url  = document.getElementById('video-url').value.trim();
+  document.getElementById('gen-btn').disabled = !(base && url);
 }
 
 function generate() {
-  const base = (document.getElementById('base-url').value.trim() || '').replace(/\/$/, '');
-  const dropbox = document.getElementById('dropbox-url').value.trim();
+  const base     = (document.getElementById('base-url').value.trim() || '').replace(/\/$/, '');
+  const videoUrl = document.getElementById('video-url').value.trim();
+  const title    = document.getElementById('title').value.trim() || 'VR KINGS Video';
 
-  if (!base || !dropbox) {
-    document.getElementById('result').classList.remove('show');
-    return;
-  }
+  checkGenBtn();
+  if (!base || !videoUrl) { document.getElementById('result').classList.remove('show'); return; }
 
-  const fixed = fixDropbox(dropbox);
-  const finalUrl = `${base}/index.html?v=${encodeURIComponent(fixed)}`;
+  // Browser / Phone URL
+  const browserUrl = `${base}/index.html?v=${encodeURIComponent(videoUrl)}&type=${currentType}`;
+  currentBrowserUrl = browserUrl;
 
-  const resultEl = document.getElementById('result-url');
-  resultEl.innerHTML = `<b style="color:var(--muted);font-size:.72rem;display:block;margin-bottom:.4rem;">👇 Copy this and paste into Patreon post:</b>${finalUrl}`;
+  // DeoVR JSON
+  const screenType = currentType === '180' ? 'dome' : 'sphere';
+  const stereoMode = currentType === '180' ? 'sbs' : 'off';
+  const is3d       = currentType === '180';
 
-  document.getElementById('open-link').href = finalUrl;
+  const json = {
+    title: title,
+    id: Math.abs(hashCode(videoUrl)),
+    is3d: is3d,
+    screenType: screenType,
+    stereoMode: stereoMode,
+    skipIntro: 0,
+    encodings: [{
+      name: "hls",
+      videoSources: [{
+        resolution: 2700,
+        url: videoUrl
+      }]
+    }]
+  };
+
+  currentJson = JSON.stringify(json, null, 2);
+
+  // DeoVR deep link — encode JSON as data URI
+  const jsonB64 = btoa(unescape(encodeURIComponent(currentJson)));
+  const jsonDataUrl = 'data:application/json;base64,' + jsonB64;
+  currentDeovrUrl = 'deovr://' + jsonDataUrl;
+
+  // Update UI
+  document.getElementById('url-browser').textContent = browserUrl;
+  document.getElementById('url-deovr').textContent = currentDeovrUrl.slice(0, 80) + '…';
+  document.getElementById('json-preview').textContent = currentJson;
+  document.getElementById('open-browser').href = browserUrl;
   document.getElementById('result').classList.add('show');
-  document.getElementById('copybtn').classList.remove('copied');
-  document.getElementById('copybtn').innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Link`;
 }
 
-function copyLink() {
-  const text = document.getElementById('open-link').href;
+function hashCode(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = Math.imul(31, h) + str.charCodeAt(i) | 0;
+  return h;
+}
+
+function copyUrl(which) {
+  const text = which === 'browser' ? currentBrowserUrl : currentDeovrUrl;
+  const btnId = which === 'browser' ? 'copy-browser' : 'copy-deovr';
   navigator.clipboard.writeText(text).then(() => {
-    const btn = document.getElementById('copybtn');
+    const btn = document.getElementById(btnId);
+    const orig = btn.innerHTML;
     btn.classList.add('copied');
     btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
-    setTimeout(() => {
-      btn.classList.remove('copied');
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy Link`;
-    }, 2000);
+    setTimeout(() => { btn.classList.remove('copied'); btn.innerHTML = orig; }, 2000);
   });
 }
+
+function copyJson() {
+  navigator.clipboard.writeText(currentJson).then(() => alert('JSON copied!'));
+}
+
+document.getElementById('video-url').addEventListener('input', checkGenBtn);
 </script>
 </body>
 </html>

@@ -160,6 +160,8 @@ function getVideoURL() {
 }
 
 const VIDEO_URL = getVideoURL();
+const VIDEO_TYPE = new URLSearchParams(window.location.search).get('type') || '360'; // '180' or '360'
+const IS_180 = VIDEO_TYPE === '180';
 
 if (!VIDEO_URL) {
   document.getElementById('nourl').classList.add('show');
@@ -247,7 +249,13 @@ function animate() {
 
 // Drag
 window.addEventListener('mousedown', e => { if (!playerActive || e.target.closest('#hud,#topbar')) return; isDragging=true; prevX=e.clientX; prevY=e.clientY; hideHint(); });
-window.addEventListener('mousemove', e => { if (!isDragging) return; lon-=(e.clientX-prevX)*.25; lat+=(e.clientY-prevY)*.25; prevX=e.clientX; prevY=e.clientY; });
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  lon -= (e.clientX-prevX) * .25;
+  lat += (e.clientY-prevY) * .25;
+  if (IS_180) lon = Math.max(-90, Math.min(90, lon));
+  prevX=e.clientX; prevY=e.clientY;
+});
 window.addEventListener('mouseup', () => isDragging=false);
 window.addEventListener('touchstart', e => { if (!playerActive || e.target.closest('#hud,#topbar')) return; if (e.touches.length===1){isDragging=true; prevX=e.touches[0].clientX; prevY=e.touches[0].clientY; hideHint();} }, {passive:true});
 window.addEventListener('touchmove', e => { if (!isDragging || gyroEnabled || e.touches.length!==1) return; lon-=(e.touches[0].clientX-prevX)*.3; lat+=(e.touches[0].clientY-prevY)*.3; prevX=e.touches[0].clientX; prevY=e.touches[0].clientY; }, {passive:true});
@@ -300,6 +308,8 @@ function onGyro(e) {
   // Smooth lerp — feels natural like YouTube
   lon = lon + (tLon - lon) * 0.12;
   lat = lat + (tLat - lat) * 0.12;
+  // Limit rotation for 180° SBS videos
+  if (IS_180) lon = Math.max(-90, Math.min(90, lon));
 }
 
 function launch() { document.getElementById('splash').classList.add('hide'); document.getElementById('loading').classList.add('on'); initThree(); }
