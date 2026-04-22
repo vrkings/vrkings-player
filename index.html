@@ -197,10 +197,11 @@ let lon = 0, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
 
+const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+
 function initThree() {
   const canvas = document.getElementById('canvas');
-  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSafari ? 1.5 : isMobile ? 1.5 : 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
