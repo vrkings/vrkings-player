@@ -199,8 +199,10 @@ let hintTimer, playerActive = false;
 
 function initThree() {
   const canvas = document.getElementById('canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: !isMobile });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, isSafari ? 1.5 : isMobile ? 1.5 : 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -253,7 +255,7 @@ function initThree() {
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
   videoTexture.format = THREE.RGBFormat;
-  const geo = new THREE.SphereGeometry(500, 128, 64);
+  const geo = new THREE.SphereGeometry(500, isMobile ? 64 : 128, isMobile ? 32 : 64);
   geo.scale(-1, 1, 1);
   scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
   window.addEventListener('resize', () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
@@ -272,9 +274,13 @@ function onCanPlay() {
   hintTimer = setTimeout(hideHint, 4000);
 }
 
-function animate() {
+let lastFrame = 0;
+function animate(ts) {
   requestAnimationFrame(animate);
   if (!playerActive) return;
+  // Limit to 30fps on mobile to save CPU/GPU
+  if (isMobile && ts - lastFrame < 33) return;
+  lastFrame = ts;
   lat = Math.max(-85, Math.min(85, lat));
   const phi = THREE.MathUtils.degToRad(90 - lat);
   const theta = THREE.MathUtils.degToRad(lon);
