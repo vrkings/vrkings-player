@@ -220,6 +220,13 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
       </button>
       <input type="range" id="vol" min="0" max="1" step="0.05" value="1" oninput="setVol(this.value)">
     </div>
+    <button class="cb" id="gyro-btn" onclick="enableGyro()" title="Gyroscope" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M12 2v2M12 20v2M2 12h2M20 12h2"/>
+        <path d="M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+    </button>
     <button class="cb" onclick="toggleFS()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
@@ -381,7 +388,56 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => isDragging = false);
 
+// ── Gyroscope (mobile device orientation) ──
+let gyroEnabled = false;
+let alphaOffset = null;
+
+function enableGyro() {
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // iOS 13+ requires permission
+    DeviceOrientationEvent.requestPermission()
+      .then(state => {
+        if (state === 'granted') startGyro();
+      })
+      .catch(console.error);
+  } else {
+    // Android and older iOS — no permission needed
+    startGyro();
+  }
+}
+
+function startGyro() {
+  window.addEventListener('deviceorientation', onGyro, true);
+  gyroEnabled = true;
+  document.getElementById('gyro-btn').style.color = 'var(--gold2)';
+  document.getElementById('gyro-btn').style.background = 'rgba(212,168,67,.25)';
+}
+
+function onGyro(e) {
+  if (!playerActive || !e.alpha) return;
+
+  // Initialize offset on first reading
+  if (alphaOffset === null) alphaOffset = e.alpha;
+
+  const alpha = e.alpha; // Z axis (left/right)
+  const beta  = e.beta;  // X axis (up/down)
+  const gamma = e.gamma; // Y axis (tilt)
+
+  // Portrait mode
+  lon = -(alpha - alphaOffset) * 1.0;
+  lat = beta - 90;
+}
+
 // ── Controls ──
+// Show gyro button on mobile
+if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+  window.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('gyro-btn');
+    if (btn) btn.style.display = 'flex';
+  });
+}
+
 function launch() {
   document.getElementById('splash').classList.add('hide');
   document.getElementById('loading').classList.add('on');
