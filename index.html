@@ -255,7 +255,6 @@ function initThree() {
   videoTexture = new THREE.VideoTexture(video);
   videoTexture.minFilter = THREE.LinearFilter;
   videoTexture.magFilter = THREE.LinearFilter;
-  videoTexture.format = THREE.RGBFormat;
   const geo = new THREE.SphereGeometry(500, isMobile ? 64 : 128, isMobile ? 32 : 64);
   geo.scale(-1, 1, 1);
   scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
