@@ -275,7 +275,7 @@ if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
 }
 
 let renderer, scene, camera, videoTexture, video;
-let lon = IS_180 ? -90 : 0, lat = 0;
+let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
 let currentFov = 75;
