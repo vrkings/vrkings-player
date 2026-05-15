@@ -229,9 +229,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
       <div class="zoom-val" id="zoom-val">75°</div>
       <button class="cb-sm" onclick="changeZoom(-1)" title="Zoom out">－</button>
     </div>
-    <button class="cb" id="gyro-btn" onclick="toggleGyro()" title="Gyroscope" style="display:none">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-    </button>
+
     <button class="cb" onclick="toggleFS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
     <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);" id="qual-btn">HD</button>
   </div>
@@ -271,9 +269,7 @@ if (!VIDEO_URL) {
   document.getElementById('deovr-link').href = 'deovr://data:application/json;base64,' + jsonB64;
 }
 
-if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
-  document.getElementById('gyro-btn').style.display = 'flex';
-}
+
 
 let renderer, scene, camera, videoTexture, video;
 let lon = -90, lat = 0;
@@ -490,7 +486,7 @@ window.addEventListener('touchstart', e => {
   if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; hideHint(); }
 }, { passive: true });
 window.addEventListener('touchmove', e => {
-  if (!isDragging || gyroEnabled || e.touches.length !== 1) return;
+  if (!isDragging || e.touches.length !== 1) return;
   lon -= (e.touches[0].clientX - prevX) * 0.3;
   lat += (e.touches[0].clientY - prevY) * 0.3;
   if (IS_180) lon = Math.max(-90, Math.min(90, lon));
@@ -498,65 +494,7 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => isDragging = false);
 
-// Gyroscope — 360 correct
-let gyroEnabled = false;
-let gyroAlphaOffset = null;
-let gyroLonAtStart = -90;
 
-function toggleGyro() {
-  if (gyroEnabled) {
-    window.removeEventListener('deviceorientation', onGyro, true);
-    gyroEnabled = false;
-    gyroAlphaOffset = null;
-    document.getElementById('gyro-btn').classList.remove('active');
-    return;
-  }
-  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-    DeviceOrientationEvent.requestPermission()
-      .then(s => { if (s === 'granted') startGyro(); })
-      .catch(console.error);
-  } else {
-    startGyro();
-  }
-}
-
-function startGyro() {
-  gyroAlphaOffset = null;
-  gyroLonAtStart = lon;
-  window.addEventListener('deviceorientation', onGyro, true);
-  gyroEnabled = true;
-  document.getElementById('gyro-btn').classList.add('active');
-}
-
-function onGyro(e) {
-  if (!playerActive || !gyroEnabled) return;
-  const alpha = e.alpha;
-  const beta  = e.beta;
-  const gamma = e.gamma;
-  if (alpha === null || beta === null) return;
-  if (gyroAlphaOffset === null) gyroAlphaOffset = alpha;
-
-  const orient = (window.screen?.orientation?.angle ?? window.orientation ?? 0);
-  let tLon, tLat;
-
-  if (Math.abs(orient) < 45) {
-    // Portrait
-    tLon = gyroLonAtStart - (alpha - gyroAlphaOffset);
-    tLat = beta - 90;
-  } else if (orient === 90 || orient === -270) {
-    // Landscape left
-    tLon = gyroLonAtStart - (alpha - gyroAlphaOffset);
-    tLat = -gamma;
-  } else {
-    // Landscape right
-    tLon = gyroLonAtStart - (alpha - gyroAlphaOffset);
-    tLat = gamma;
-  }
-
-  tLat = Math.max(-85, Math.min(85, tLat));
-  lon = lon + (tLon - lon) * 0.15;
-  lat = lat + (tLat - lat) * 0.15;
-}
 
 function launch() {
   document.getElementById('splash').classList.add('hide');
@@ -566,11 +504,6 @@ function launch() {
 
 function goBack() {
   if (video) video.pause();
-  if (gyroEnabled) {
-    window.removeEventListener('deviceorientation', onGyro, true);
-    gyroEnabled = false;
-    gyroAlphaOffset = null;
-  }
   // FIX: destroy HLS instance to free memory
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
   qualMenuOpen = false;
@@ -584,7 +517,6 @@ function goBack() {
   document.getElementById('hud').classList.remove('show');
   document.getElementById('draghint').classList.remove('gone');
   document.getElementById('buffering').classList.remove('show');
-  document.getElementById('gyro-btn').classList.remove('active');
   document.getElementById('splash').classList.remove('hide');
 }
 
