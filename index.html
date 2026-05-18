@@ -256,15 +256,26 @@ if (!VIDEO_URL) {
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 } else {
-  // FIX: Build proper DeoVR JSON deep link with correct format flags
-  // DeoVR integration — two methods:
-  // 1. Deep link button opens deo.html which handles the DeoVR launch
-  // 2. When opened directly in DeoVR browser, deo.html serves proper JSON
-  const deoPage = window.location.origin + window.location.pathname.replace('index.html','') + 'deo.html';
-  const deoParams = '?v=' + encodeURIComponent(VIDEO_URL) + '&title=' + encodeURIComponent(TITLE||'VR KINGS') + (IS_180 ? '&type=sbs' : '&type=360');
+  // DeoVR integration — per official DeoVR documentation
+  // Deep link format: deovr://https://yoursite.com/deo.html?v=URL
+  // deo.html returns proper JSON when opened in DeoVR browser
+  const deoBase = window.location.href.replace(/\/[^\/]*$/, '') + '/deo.html';
+  const deoQuery = '?v=' + encodeURIComponent(VIDEO_URL)
+    + '&title=' + encodeURIComponent(TITLE || 'VR KINGS')
+    + '&type=' + (IS_180 ? 'sbs' : '360');
+  const deoPageUrl = deoBase + deoQuery;
   const deoLink = document.getElementById('deovr-link');
-  deoLink.href = deoPage + deoParams;
+  deoLink.href = deoPageUrl;
   deoLink.target = '_blank';
+  deoLink.onclick = function(e) {
+    e.preventDefault();
+    // Try deep link first — opens DeoVR app directly
+    window.location.href = 'deovr://' + deoPageUrl;
+    // Fallback: open the deo.html page after 2s if app didn't open
+    setTimeout(function() {
+      if (!document.hidden) window.open(deoPageUrl, '_blank');
+    }, 2000);
+  };
 }
 
 
