@@ -257,16 +257,14 @@ if (!VIDEO_URL) {
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 } else {
   // FIX: Build proper DeoVR JSON deep link with correct format flags
-  const deovrJson = JSON.stringify({
-    title: 'VR KINGS Video',
-    is3d: IS_180,
-    screenType: IS_180 ? 'dome' : 'sphere',
-    stereoMode: IS_180 ? 'sbs' : 'off',
-    skipIntro: 0,
-    encodings: [{ name: 'hls', videoSources: [{ resolution: 2700, url: VIDEO_URL }] }]
-  });
-  const jsonB64 = btoa(unescape(encodeURIComponent(deovrJson)));
-  document.getElementById('deovr-link').href = 'deovr://data:application/json;base64,' + jsonB64;
+  // DeoVR integration — two methods:
+  // 1. Deep link button opens deo.html which handles the DeoVR launch
+  // 2. When opened directly in DeoVR browser, deo.html serves proper JSON
+  const deoPage = window.location.origin + window.location.pathname.replace('index.html','') + 'deo.html';
+  const deoParams = '?v=' + encodeURIComponent(VIDEO_URL) + '&title=' + encodeURIComponent(TITLE||'VR KINGS') + (IS_180 ? '&type=sbs' : '&type=360');
+  const deoLink = document.getElementById('deovr-link');
+  deoLink.href = deoPage + deoParams;
+  deoLink.target = '_blank';
 }
 
 
