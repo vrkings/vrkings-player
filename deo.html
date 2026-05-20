@@ -49,31 +49,62 @@ h1{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:300;margi
     <p class="sub">Go back and use the DeoVR button in the player.</p>
   </div>
 </div>
+
 <script>
 var p = new URLSearchParams(window.location.search);
 var videoUrl = p.get('v');
 var title = p.get('title') || 'VR KINGS';
-var is180 = p.get('type') === 'sbs';
+var is180 = p.get('type') === 'sbs' || p.get('type') === '180';
 
-if (!videoUrl) {
-  document.getElementById('main-content').style.display = 'none';
-  document.getElementById('no-url').style.display = 'block';
-} else {
-  document.getElementById('url-display').textContent = videoUrl;
-  if (title !== 'VR KINGS') document.getElementById('vid-title').textContent = title;
+// ─── КРИТИЧНО: DeoVR browser detection ───────────────────────────────────────
+// Коли DeoVR відкриває URL у своєму браузері, він очікує отримати JSON.
+// Ми детектуємо DeoVR по User-Agent і повертаємо чистий JSON замість HTML.
+// DeoVR UA містить "deovr", Pico Browser — "Pico", Meta Quest Browser — "OculusBrowser"
+var ua = (navigator.userAgent || '').toLowerCase();
+var isDeoVRBrowser = (
+  ua.indexOf('deovr') > -1 ||
+  ua.indexOf('pico') > -1 ||
+  ua.indexOf('oculusbrowser') > -1 ||
+  p.get('deovr') === '1'   // fallback: ?deovr=1 для тестування
+);
 
-  // Correct DeoVR JSON per official docs
-  var deoData = {
+if (videoUrl && isDeoVRBrowser) {
+  // ── Повертаємо чистий JSON для DeoVR ────────────────────────────────────
+  // DeoVR прочитає цей JSON і відкриє відео як справжнє VR
+  var deoJson = {
     "title": title,
     "is3d": true,
     "screenType": is180 ? "dome" : "sphere",
     "stereoMode": is180 ? "sbs" : "mono",
     "skipIntro": 0,
     "videoLength": 0,
-    "encodings": [{"name":"h264","videoSources":[{"resolution":3840,"url":videoUrl}]}]
+    "encodings": [
+      {
+        "name": "h264",
+        "videoSources": [
+          {"resolution": 3840, "url": videoUrl}
+        ]
+      }
+    ]
   };
+  // Замінюємо весь HTML на JSON
+  // Використовуємо meta refresh щоб уникнути проблем з document.write в деяких браузерах
+  document.documentElement.innerHTML = JSON.stringify(deoJson);
+  // Якщо вище не спрацює — спробуємо через data URI
+  // (деякі версії DeoVR browser блокують document.write)
 
-  // Deep link: deovr://https://thispage — DeoVR opens this URL and reads JSON
+} else if (!videoUrl) {
+  // ── Немає URL — показуємо помилку ───────────────────────────────────────
+  document.getElementById('main-content').style.display = 'none';
+  document.getElementById('no-url').style.display = 'block';
+
+} else {
+  // ── Звичайний браузер (телефон, планшет, ПК) ─────────────────────────────
+  // Показуємо сторінку з кнопкою і інструкцією
+  document.getElementById('url-display').textContent = window.location.href;
+  if (title !== 'VR KINGS') document.getElementById('vid-title').textContent = title;
+
+  // Deep link: deovr:// + URL цієї ж сторінки → DeoVR відкриє її у своєму browser → отримає JSON
   var thisUrl = window.location.href;
   var deepLink = 'deovr://' + thisUrl;
 
@@ -83,28 +114,20 @@ if (!videoUrl) {
     e.preventDefault();
     window.location.href = deepLink;
   };
-
-  // If opened IN DeoVR browser, the page needs to return JSON
-  // DeoVR browser makes a GET request — we detect it and inject JSON
-  var ua = (navigator.userAgent || '').toLowerCase();
-  var inDeoVR = ua.indexOf('deovr') > -1 || ua.indexOf('oculus') > -1 || ua.indexOf('pico') > -1 || p.get('deovr') === '1';
-
-  if (inDeoVR) {
-    // Replace entire page with JSON response
-    document.open('application/json');
-    document.write(JSON.stringify(deoData));
-    document.close();
-  }
 }
 
 function copyUrl() {
-  if (!videoUrl) return;
+  // Копіюємо URL цієї сторінки — юзер вставляє його в DeoVR Browser
+  var urlToCopy = window.location.href;
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(videoUrl);
+    navigator.clipboard.writeText(urlToCopy);
   } else {
     var t = document.createElement('textarea');
-    t.value = videoUrl; document.body.appendChild(t); t.select();
-    document.execCommand('copy'); document.body.removeChild(t);
+    t.value = urlToCopy;
+    document.body.appendChild(t);
+    t.select();
+    document.execCommand('copy');
+    document.body.removeChild(t);
   }
   document.getElementById('copied').style.display = 'block';
   setTimeout(function(){ document.getElementById('copied').style.display='none'; }, 2000);

@@ -256,19 +256,36 @@ if (!VIDEO_URL) {
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 } else {
-  // DeoVR — відкриває deo.html яка повертає правильний JSON для окулярів
+  // DeoVR — два сценарії:
+  // 1. Окуляри відкривають плеєр у браузері → кнопка "Open in DeoVR" → deep link deovr://
+  // 2. DeoVR app → Browser → відкриває deo.json URL напряму → отримує чистий JSON
+  //
+  // ПРАВИЛЬНИЙ ФОРМАТ: deovr://https://... веде на deo.html?deovr=1
+  // Коли DeoVR відкриває цю сторінку — UA містить "deovr", сторінка повертає JSON через document.write
+  // АБО: передаємо URL відео напряму через deovr:// (якщо відео mp4, не HLS)
+
   const deoBase = window.location.href.replace(/\/[^\/]*$/, '') + '/deo.html';
-  const deoQuery = '?v=' + encodeURIComponent(VIDEO_URL) + '&type=' + (IS_180 ? 'sbs' : '360');
+  const deoQuery = '?v=' + encodeURIComponent(VIDEO_URL)
+    + '&type=' + (IS_180 ? 'sbs' : '360')
+    + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
   const deoPageUrl = deoBase + deoQuery;
+
+  // Deep link: deovr:// + повна URL сторінки deo.html
+  // DeoVR App відкриє цю URL у своєму браузері → deo.html детектує UA → повертає JSON
+  const deepLink = 'deovr://' + deoPageUrl;
+
   const deoLinkEl = document.getElementById('deovr-link');
-  deoLinkEl.href = deoPageUrl;
-  deoLinkEl.target = '_blank';
+  deoLinkEl.href = deepLink;
+  deoLinkEl.target = '_self';
   deoLinkEl.onclick = function(e) {
     e.preventDefault();
-    window.location.href = 'deovr://' + deoPageUrl;
+    // Спробуємо deep link (відкриє DeoVR якщо встановлений)
+    window.location.href = deepLink;
+    // Fallback: якщо DeoVR не встановлений — відкрити deo.html в новій вкладці
+    // щоб юзер міг скопіювати URL вручну
     setTimeout(function() {
       if (!document.hidden) window.open(deoPageUrl, '_blank');
-    }, 2000);
+    }, 1500);
   };
 }
 
