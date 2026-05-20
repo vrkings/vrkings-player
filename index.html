@@ -264,15 +264,13 @@ if (!VIDEO_URL) {
   // Коли DeoVR відкриває цю сторінку — UA містить "deovr", сторінка повертає JSON через document.write
   // АБО: передаємо URL відео напряму через deovr:// (якщо відео mp4, не HLS)
 
-  const deoBase = window.location.href.replace(/\/[^\/]*$/, '') + '/deo.html';
+  // Vercel API → чистий JSON з правильним Content-Type → DeoVR грає як справжнє VR
+  const VERCEL_API = 'https://vrkings-player-hzb1y6oyb-vrkingsr-4166s-projects.vercel.app/api/deovr';
   const deoParams = '?v=' + encodeURIComponent(VIDEO_URL)
     + '&type=' + (IS_180 ? 'sbs' : '360')
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
 
-  // JSON URL (без &html=1) → deo.html повертає чистий JSON → DeoVR грає як VR
-  const deoJsonUrl = deoBase + deoParams;
-  // HTML URL (з &html=1) → deo.html показує UI для звичайних браузерів
-  const deoHtmlUrl = deoBase + deoParams + '&html=1';
+  const deoJsonUrl = VERCEL_API + deoParams;
   const deepLink = 'deovr://' + deoJsonUrl;
 
   const deoLinkEl = document.getElementById('deovr-link');
@@ -281,10 +279,6 @@ if (!VIDEO_URL) {
   deoLinkEl.onclick = function(e) {
     e.preventDefault();
     window.location.href = deepLink;
-    // Fallback: якщо DeoVR не встановлений → відкрити HTML UI
-    setTimeout(function() {
-      if (!document.hidden) window.open(deoHtmlUrl, '_blank');
-    }, 1500);
   };
 }
 
