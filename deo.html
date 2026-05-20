@@ -14,13 +14,14 @@ h1{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:300;margi
 .sub{color:var(--muted);font-size:.85rem;margin-bottom:2.5rem;line-height:1.7}
 .btn-main{display:flex;align-items:center;justify-content:center;gap:.7rem;background:rgba(212,168,67,.1);border:1px solid rgba(212,168,67,.4);color:var(--gold);padding:1rem 2.4rem;border-radius:99px;font-size:.85rem;text-decoration:none;cursor:pointer;transition:all .25s;font-family:'Outfit',sans-serif;letter-spacing:.1em;text-transform:uppercase;margin-bottom:1rem;width:100%}
 .btn-main:hover{background:rgba(212,168,67,.2)}
-.btn-copy{display:flex;align-items:center;justify-content:center;gap:.5rem;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted);padding:.7rem 1.6rem;border-radius:99px;font-size:.78rem;cursor:pointer;font-family:'Outfit',sans-serif;letter-spacing:.08em;text-transform:uppercase;width:100%;margin-bottom:1.5rem}
+.btn-copy{display:flex;align-items:center;justify-content:center;gap:.5rem;background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--muted);padding:.7rem 1.6rem;border-radius:99px;font-size:.78rem;cursor:pointer;font-family:'Outfit',sans-serif;letter-spacing:.08em;text-transform:uppercase;width:100%;margin-bottom:.5rem}
 .divider{height:1px;background:var(--border);margin:1.5rem 0}
 .step{display:flex;gap:.9rem;margin-bottom:.9rem;align-items:flex-start;text-align:left}
 .n{width:22px;height:22px;border-radius:50%;background:rgba(212,168,67,.1);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.6rem;color:var(--gold);flex-shrink:0;margin-top:.15rem}
 .st{font-size:.8rem;color:var(--muted);line-height:1.55}
 .st strong{color:var(--text)}
 .url-box{background:rgba(0,0,0,.3);border:1px solid var(--border);border-radius:10px;padding:.9rem 1rem;font-size:.7rem;color:rgba(255,255,255,.35);word-break:break-all;text-align:left;line-height:1.7;margin-bottom:1.2rem}
+.copied-msg{color:var(--gold);font-size:.75rem;margin-bottom:1rem;min-height:1.2rem}
 </style>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;1,300&family=Outfit:wght@300;400&display=swap" rel="stylesheet">
 </head>
@@ -30,19 +31,31 @@ h1{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:300;margi
   <div id="main-content">
     <h1>Open in <em style="color:var(--gold)">DeoVR</em></h1>
     <p class="sub" id="vid-title">Tap to launch DeoVR and watch in your headset</p>
+
     <a id="deovr-btn" href="#" class="btn-main">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>
       Open in DeoVR
     </a>
-    <button class="btn-copy" onclick="copyUrl()">Copy video URL</button>
-    <div id="copied" style="display:none;color:var(--gold);font-size:.75rem;margin-bottom:1rem">✓ Copied!</div>
+
     <div class="divider"></div>
-    <p style="font-size:.72rem;color:var(--muted);margin-bottom:1rem;text-align:left">If button doesn't work — open DeoVR browser manually:</p>
+
+    <p style="font-size:.72rem;color:var(--muted);margin-bottom:1rem;text-align:left">
+      Button didn't work? Open DeoVR app → Browser → paste this URL:
+    </p>
+
+    <!-- URL відео для вставки в DeoVR Browser -->
+    <div class="url-box" id="url-display">—</div>
+
+    <button class="btn-copy" onclick="copyVideoUrl()">
+      📋 Copy URL for DeoVR Browser
+    </button>
+    <div class="copied-msg" id="copied-msg"></div>
+
+    <div class="divider"></div>
+
     <div class="step"><div class="n">1</div><div class="st">Open <strong>DeoVR app</strong> on your headset</div></div>
     <div class="step"><div class="n">2</div><div class="st">Go to <strong>Browser</strong> (globe icon)</div></div>
-    <div class="step"><div class="n">3</div><div class="st">Paste this URL:</div></div>
-    <div class="url-box" id="url-display">—</div>
-    <div class="step"><div class="n">4</div><div class="st">Video loads as <strong>360° VR</strong> automatically</div></div>
+    <div class="step"><div class="n">3</div><div class="st">Paste the URL above → video loads as <strong>360° VR</strong></div></div>
   </div>
   <div id="no-url" style="display:none">
     <h1>No video URL</h1>
@@ -56,58 +69,44 @@ var videoUrl = p.get('v');
 var title = p.get('title') || 'VR KINGS';
 var is180 = p.get('type') === 'sbs' || p.get('type') === '180';
 
-// ─── КРИТИЧНО: DeoVR browser detection ───────────────────────────────────────
-// Коли DeoVR відкриває URL у своєму браузері, він очікує отримати JSON.
-// Ми детектуємо DeoVR по User-Agent і повертаємо чистий JSON замість HTML.
-// DeoVR UA містить "deovr", Pico Browser — "Pico", Meta Quest Browser — "OculusBrowser"
+// DeoVR JSON — саме цей формат очікує DeoVR Browser
+var deoJson = videoUrl ? {
+  "title": title,
+  "is3d": true,
+  "screenType": is180 ? "dome" : "sphere",
+  "stereoMode": is180 ? "sbs" : "mono",
+  "skipIntro": 0,
+  "videoLength": 0,
+  "encodings": [{
+    "name": "h264",
+    "videoSources": [{"resolution": 3840, "url": videoUrl}]
+  }]
+} : null;
+
+// Детектуємо чи відкрито в DeoVR Browser
 var ua = (navigator.userAgent || '').toLowerCase();
-var isDeoVRBrowser = (
-  ua.indexOf('deovr') > -1 ||
-  ua.indexOf('pico') > -1 ||
-  ua.indexOf('oculusbrowser') > -1 ||
-  p.get('deovr') === '1'   // fallback: ?deovr=1 для тестування
-);
+var isDeoVRBrowser = ua.indexOf('deovr') > -1 || ua.indexOf('oculusbrowser') > -1 || ua.indexOf('pico') > -1 || p.get('deovr') === '1';
 
-if (videoUrl && isDeoVRBrowser) {
-  // ── Повертаємо чистий JSON для DeoVR ────────────────────────────────────
-  // DeoVR прочитає цей JSON і відкриє відео як справжнє VR
-  var deoJson = {
-    "title": title,
-    "is3d": true,
-    "screenType": is180 ? "dome" : "sphere",
-    "stereoMode": is180 ? "sbs" : "mono",
-    "skipIntro": 0,
-    "videoLength": 0,
-    "encodings": [
-      {
-        "name": "h264",
-        "videoSources": [
-          {"resolution": 3840, "url": videoUrl}
-        ]
-      }
-    ]
-  };
-  // Замінюємо весь HTML на JSON
-  // Використовуємо meta refresh щоб уникнути проблем з document.write в деяких браузерах
-  document.documentElement.innerHTML = JSON.stringify(deoJson);
-  // Якщо вище не спрацює — спробуємо через data URI
-  // (деякі версії DeoVR browser блокують document.write)
-
-} else if (!videoUrl) {
-  // ── Немає URL — показуємо помилку ───────────────────────────────────────
+if (!videoUrl) {
   document.getElementById('main-content').style.display = 'none';
   document.getElementById('no-url').style.display = 'block';
 
+} else if (isDeoVRBrowser && deoJson) {
+  // Відкрито в DeoVR Browser — повертаємо чистий JSON
+  document.documentElement.innerHTML = JSON.stringify(deoJson);
+
 } else {
-  // ── Звичайний браузер (телефон, планшет, ПК) ─────────────────────────────
-  // Показуємо сторінку з кнопкою і інструкцією
-  document.getElementById('url-display').textContent = window.location.href;
+  // Звичайний браузер — показуємо UI
   if (title !== 'VR KINGS') document.getElementById('vid-title').textContent = title;
 
-  // Deep link: deovr:// + URL цієї ж сторінки → DeoVR відкриє її у своєму browser → отримає JSON
-  var thisUrl = window.location.href;
-  var deepLink = 'deovr://' + thisUrl;
+  // URL цієї сторінки для вставки в DeoVR Browser вручну
+  // DeoVR Browser відкриє цю сторінку → отримає JSON вище
+  var thisDeoUrl = window.location.href;
+  document.getElementById('url-display').textContent = thisDeoUrl;
 
+  // Deep link кнопка — deovr:// + URL цієї сторінки
+  // Правильний формат: deovr://https://site.com/deo.html?v=...
+  var deepLink = 'deovr://' + thisDeoUrl;
   var btn = document.getElementById('deovr-btn');
   btn.href = deepLink;
   btn.onclick = function(e) {
@@ -116,21 +115,27 @@ if (videoUrl && isDeoVRBrowser) {
   };
 }
 
-function copyUrl() {
-  // Копіюємо URL цієї сторінки — юзер вставляє його в DeoVR Browser
-  var urlToCopy = window.location.href;
+// Копіює URL цієї deo.html сторінки — її вставляють в DeoVR Browser
+// DeoVR Browser відкриє її і отримає JSON
+function copyVideoUrl() {
+  var url = window.location.href;
   if (navigator.clipboard) {
-    navigator.clipboard.writeText(urlToCopy);
+    navigator.clipboard.writeText(url).then(showCopied);
   } else {
     var t = document.createElement('textarea');
-    t.value = urlToCopy;
+    t.value = url;
     document.body.appendChild(t);
     t.select();
     document.execCommand('copy');
     document.body.removeChild(t);
+    showCopied();
   }
-  document.getElementById('copied').style.display = 'block';
-  setTimeout(function(){ document.getElementById('copied').style.display='none'; }, 2000);
+}
+
+function showCopied() {
+  var msg = document.getElementById('copied-msg');
+  msg.textContent = '✓ Copied! Paste in DeoVR Browser';
+  setTimeout(function(){ msg.textContent = ''; }, 3000);
 }
 </script>
 </body>
