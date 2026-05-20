@@ -265,26 +265,25 @@ if (!VIDEO_URL) {
   // АБО: передаємо URL відео напряму через deovr:// (якщо відео mp4, не HLS)
 
   const deoBase = window.location.href.replace(/\/[^\/]*$/, '') + '/deo.html';
-  const deoQuery = '?v=' + encodeURIComponent(VIDEO_URL)
+  const deoParams = '?v=' + encodeURIComponent(VIDEO_URL)
     + '&type=' + (IS_180 ? 'sbs' : '360')
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
-  const deoPageUrl = deoBase + deoQuery;
 
-  // Deep link: deovr:// + повна URL сторінки deo.html
-  // DeoVR App відкриє цю URL у своєму браузері → deo.html детектує UA → повертає JSON
-  const deepLink = 'deovr://' + deoPageUrl;
+  // JSON URL (без &html=1) → deo.html повертає чистий JSON → DeoVR грає як VR
+  const deoJsonUrl = deoBase + deoParams;
+  // HTML URL (з &html=1) → deo.html показує UI для звичайних браузерів
+  const deoHtmlUrl = deoBase + deoParams + '&html=1';
+  const deepLink = 'deovr://' + deoJsonUrl;
 
   const deoLinkEl = document.getElementById('deovr-link');
   deoLinkEl.href = deepLink;
   deoLinkEl.target = '_self';
   deoLinkEl.onclick = function(e) {
     e.preventDefault();
-    // Спробуємо deep link (відкриє DeoVR якщо встановлений)
     window.location.href = deepLink;
-    // Fallback: якщо DeoVR не встановлений — відкрити deo.html в новій вкладці
-    // щоб юзер міг скопіювати URL вручну
+    // Fallback: якщо DeoVR не встановлений → відкрити HTML UI
     setTimeout(function() {
-      if (!document.hidden) window.open(deoPageUrl, '_blank');
+      if (!document.hidden) window.open(deoHtmlUrl, '_blank');
     }, 1500);
   };
 }
