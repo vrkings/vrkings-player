@@ -271,23 +271,21 @@ if (!VIDEO_URL) {
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
 
   const deoJsonUrl = VERCEL_API + deoParams;
+  const deepLink = 'deovr://' + deoJsonUrl;
 
-  // Відкриваємо URL напряму в браузері DeoVR — без deep link
-  // DeoVR browser бачить JSON і грає як VR
-  // Перевага: перемикання між відео без закриття app
   const deoLinkEl = document.getElementById('deovr-link');
-  deoLinkEl.href = deoJsonUrl;
-  deoLinkEl.target = '_blank';
+  deoLinkEl.href = deepLink;
+  deoLinkEl.target = '_self';
   deoLinkEl.onclick = function(e) {
     e.preventDefault();
-    window.open(deoJsonUrl, '_blank');
+    window.location.href = deepLink;
   };
 }
 
 
 
 let renderer, scene, camera, videoTexture, video;
-let lon = -180, lat = 0;
+let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
 let currentFov = 75;
