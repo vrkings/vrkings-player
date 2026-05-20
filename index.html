@@ -265,7 +265,7 @@ if (!VIDEO_URL) {
   // АБО: передаємо URL відео напряму через deovr:// (якщо відео mp4, не HLS)
 
   // Vercel API → чистий JSON з правильним Content-Type → DeoVR грає як справжнє VR
-  const VERCEL_API = 'https://vrkings-player.vercel.app/api/deovr';
+  const VERCEL_API = 'https://deovr-api.vrkings-r.workers.dev/';
   const deoParams = '?v=' + encodeURIComponent(VIDEO_URL)
     + '&type=' + (IS_180 ? 'sbs' : '360')
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
