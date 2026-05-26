@@ -289,6 +289,7 @@ let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
 let currentFov = 75;
+let hlsInstance = null;   // FIX: moved from initThree() — goBack() needs top-scope access
 const FOV_MIN = 30, FOV_MAX = 100, FOV_STEP = 5;
 
 function changeZoom(dir) {
@@ -348,7 +349,6 @@ function initThree() {
   });
   video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
 
-  let hlsInstance = null;
 
   if (VIDEO_URL.includes('.m3u8')) {
     if (video.canPlayType('application/vnd.apple.mpegurl')) {
