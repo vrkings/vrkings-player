@@ -1,667 +1,682 @@
 <!DOCTYPE html>
-<html lang="uk">
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>VR Kings CEO Dashboard</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>VR KINGS — For Patrons</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#ffffff;--bg2:#f7f7f5;--bg3:#f0efeb;--text:#1a1a1a;--text2:#6b6b6b;--text3:#9b9b9b;--border:#e5e5e3;--border2:#d0d0ce;--green:#0F6E56;--green-bg:#E1F5EE;--amber:#854F0B;--amber-bg:#FAEEDA;--red:#993C1D;--red-bg:#FAECE7;--radius:8px;--radius-lg:12px}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;color:var(--text);background:var(--bg);min-height:100vh}
-.app{max-width:960px;margin:0 auto;padding:1.5rem 1rem}
-.top-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:10px}
-.logo-text{font-size:18px;font-weight:600;letter-spacing:-.3px}
-.logo-sub{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em}
-.sync-badge{font-size:11px;padding:3px 10px;border-radius:20px;border:1px solid var(--border2);color:var(--text3)}
-.sync-badge.ok{color:var(--green);border-color:#5DCAA5;background:var(--green-bg)}
-.sync-badge.saving{color:var(--amber);border-color:#FAC775;background:var(--amber-bg)}
-.sync-badge.err{color:var(--red);border-color:#F0997B;background:var(--red-bg)}
-.month-badge{font-size:12px;padding:4px 14px;border:1px solid var(--border);border-radius:var(--radius);color:var(--text2)}
-.nav{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:1.5rem;border-bottom:1px solid var(--border);padding-bottom:1rem}
-.nb{padding:6px 14px;border:1px solid var(--border);border-radius:var(--radius);background:transparent;cursor:pointer;font-size:13px;color:var(--text2);font-family:inherit;transition:all .15s}
-.nb.on{background:var(--bg2);color:var(--text);font-weight:500;border-color:var(--border2)}
-.nb:hover:not(.on){background:var(--bg2)}
-.sec{display:none}.sec.on{display:block}
-.mg{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:1.25rem}
-.mc{border-radius:var(--radius);padding:14px 16px;background:var(--bg2)}
-.mc.ok{background:var(--green-bg)}.mc.warn{background:var(--amber-bg)}.mc.bad{background:var(--red-bg)}
-.ml{font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;color:var(--text3)}
-.mv{font-size:23px;font-weight:600;line-height:1.1}
-.mc.ok .mv{color:var(--green)}.mc.warn .mv{color:var(--amber)}.mc.bad .mv{color:var(--red)}
-.ms{font-size:11px;margin-top:4px;color:var(--text2)}
-.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:1.1rem 1.25rem;margin-bottom:1rem}
-.ct{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:14px}
-input[type=number],input[type=text],textarea,select{border:1px solid var(--border2);border-radius:var(--radius);padding:7px 10px;font-size:14px;font-family:inherit;background:var(--bg);color:var(--text);width:100%;transition:border .15s}
-input:focus,textarea:focus,select:focus{outline:none;border-color:var(--text2)}
-textarea{resize:vertical;min-height:64px}
-.fr2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
-.fr6{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:10px}
-.field{margin-bottom:10px}
-.fl{font-size:12px;color:var(--text2);margin-bottom:5px;display:block}
-.fl small{font-size:11px;color:var(--text3)}
-.btn{background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);padding:8px 20px;cursor:pointer;font-size:13px;font-family:inherit;color:var(--text);font-weight:500;transition:all .15s}
-.btn:hover{background:var(--bg3)}.btn:active{transform:scale(0.98)}
-.btn.primary{background:var(--text);color:var(--bg);border-color:var(--text)}
-.btn.primary:hover{opacity:.85}
-.trow{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
-.trow:last-child{border-bottom:none}
-.tag{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;font-weight:500}
-.tg{background:var(--green-bg);color:var(--green)}.ty{background:var(--amber-bg);color:var(--amber)}.tr{background:var(--red-bg);color:var(--red)}.tn{background:var(--bg2);color:var(--text2)}
-.dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;margin-top:5px}
-.dg{background:#1D9E75}.dy{background:#EF9F27}.dr{background:#D85A30}
-.sig{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.55}
-.sig:last-child{border-bottom:none}
-.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.bw{margin-bottom:10px}
-.bm{display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;color:var(--text2)}
-.bt{background:var(--bg2);border-radius:4px;height:9px;overflow:hidden}
-.bf{height:100%;border-radius:4px;transition:width .7s}
-.ai{display:flex;gap:12px;align-items:flex-start;padding:12px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px}
-.an{font-size:22px;font-weight:600;color:var(--text3);min-width:26px;line-height:1.2}
-.ab{flex:1}.at{font-weight:500;font-size:13px;margin-bottom:4px}.as{font-size:12px;color:var(--text2);line-height:1.5}
-.ai.urgent{border-color:#F0997B;background:var(--red-bg)}.ai.urgent .an{color:var(--red)}
-.ai.medium{border-color:#FAC775;background:var(--amber-bg)}.ai.medium .an{color:var(--amber)}
-.mnav{display:flex;align-items:center;gap:12px;margin-bottom:1.25rem}
-.mnb{border:1px solid var(--border);border-radius:var(--radius);background:transparent;cursor:pointer;padding:5px 12px;font-size:14px;font-family:inherit;color:var(--text2)}
-.mnb:hover{background:var(--bg2)}
-.mlbl{font-size:15px;font-weight:500;min-width:130px;text-align:center}
-.ab-box{border-radius:var(--radius);padding:12px 16px;margin-bottom:10px;font-size:13px;line-height:1.55;border:1px solid}
-.ab-box.red{background:var(--red-bg);border-color:#F0997B;color:var(--red)}
-.ab-box.amber{background:var(--amber-bg);border-color:#FAC775;color:var(--amber)}
-.ab-box.green{background:var(--green-bg);border-color:#5DCAA5;color:var(--green)}
-.tier-grid{display:grid;grid-template-columns:110px 1fr 80px 70px 70px;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}
-.tier-grid:last-child{border-bottom:none}
-.tier-hdr{display:grid;grid-template-columns:110px 1fr 80px 70px 70px;gap:8px;padding:5px 0;border-bottom:1px solid var(--border2)}
-.tier-hdr span{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.03em}
-.tier-bar-wrap{height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;position:relative}
-.tier-bar{position:absolute;left:0;top:0;height:100%;border-radius:4px}
-.hypo-item{border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px;margin-bottom:10px}
-.del-btn{border:none;background:none;cursor:pointer;color:var(--text3);font-size:20px;padding:0 4px;line-height:1}
-.del-btn:hover{color:var(--red)}
-.fn-step{display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--border)}
-.fn-step:last-child{border-bottom:none}
-.fn{font-size:20px;font-weight:600;min-width:75px}
-.fi{flex:1}.ft{font-size:13px;font-weight:500}.fsub{font-size:12px;color:var(--text2);margin-top:2px}
-.setup-screen{text-align:center;padding:60px 20px;max-width:520px;margin:0 auto}
-.setup-screen h2{font-size:22px;font-weight:600;margin-bottom:12px}
-.setup-screen p{font-size:14px;color:var(--text2);line-height:1.7;margin-bottom:20px}
-.setup-url{width:100%;padding:10px 14px;border:1px solid var(--border2);border-radius:var(--radius);font-size:13px;font-family:inherit;margin-bottom:12px}
-.step{display:flex;gap:12px;align-items:flex-start;text-align:left;padding:12px;background:var(--bg2);border-radius:var(--radius);margin-bottom:8px}
-.step-num{width:24px;height:24px;border-radius:50%;background:var(--text);color:var(--bg);font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.step-text{font-size:13px;line-height:1.6;color:var(--text2)}
-.step-text strong{color:var(--text)}
-.save-ind{font-size:12px;color:var(--text3);margin-top:6px;display:block}
-.insight-box{background:var(--bg2);border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;font-size:13px;line-height:1.6}
-.insight-box strong{display:block;margin-bottom:4px}
-@media(max-width:600px){.two{grid-template-columns:1fr}.fr2,.fr3{grid-template-columns:1fr 1fr}.fr6{grid-template-columns:1fr 1fr 1fr}.tier-grid,.tier-hdr{grid-template-columns:80px 1fr 70px 50px}}
-@media(max-width:400px){.fr2,.fr3,.fr6{grid-template-columns:1fr}}
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Outfit:wght@300;400;500&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#07080b;--gold:#d4a843;--gold2:#f0cc7a;--text:#e2ddd4;--muted:#52504a;--border:rgba(212,168,67,.15);}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;}
+body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;opacity:.3;mix-blend-mode:screen;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23g)' opacity='.05'/%3E%3C/svg%3E");}
+#canvas{position:fixed;inset:0;z-index:1;display:none;cursor:grab;}
+#canvas:active{cursor:grabbing;}
+#canvas.active{display:block;}
+#splash{position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);transition:opacity .9s ease,visibility .9s;}
+#splash.hide{opacity:0;visibility:hidden;pointer-events:none;}
+.glow{position:absolute;bottom:-5%;left:50%;transform:translateX(-50%);width:min(700px,120vw);height:260px;background:radial-gradient(ellipse,rgba(212,168,67,.12) 0%,transparent 70%);pointer-events:none;}
+.splash-inner{position:relative;z-index:1;text-align:center;padding:2rem;animation:rise .9s cubic-bezier(.2,0,.1,1) both;}
+@keyframes rise{from{opacity:0;transform:translateY(26px)}to{opacity:1;transform:none}}
+.tag{display:inline-flex;align-items:center;gap:.45rem;border:1px solid var(--border);padding:.28rem .95rem;border-radius:99px;font-size:.65rem;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);margin-bottom:1.8rem;animation:rise .9s .08s both;}
+.tag svg{width:12px;height:12px;}
+.splash-title{font-family:'Cormorant Garamond',serif;font-size:clamp(2.6rem,8vw,5rem);font-weight:300;line-height:1.05;color:#fff;margin-bottom:.7rem;animation:rise .9s .13s both;}
+.splash-title em{font-style:italic;color:var(--gold2);}
+.splash-sub{font-size:.9rem;font-weight:300;color:var(--muted);line-height:1.75;max-width:320px;margin:0 auto 2.6rem;animation:rise .9s .18s both;}
+.hints{display:flex;align-items:center;justify-content:center;gap:2rem;margin-bottom:2.6rem;animation:rise .9s .23s both;}
+.hint{display:flex;flex-direction:column;align-items:center;gap:.4rem;font-size:.67rem;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;}
+.hico{width:42px;height:42px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gold);}
+.hico svg{width:19px;height:19px;}
+.btn-row-splash{display:flex;flex-direction:column;align-items:center;gap:.8rem;animation:rise .9s .28s both;}
+.btn-watch{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid var(--gold);color:var(--gold);font-family:'Outfit',sans-serif;font-size:.88rem;font-weight:500;letter-spacing:.1em;text-transform:uppercase;padding:.85rem 2.6rem;border-radius:99px;cursor:pointer;position:relative;overflow:hidden;transition:color .3s;}
+.btn-watch::before{content:'';position:absolute;inset:0;background:var(--gold);transform:scaleX(0);transform-origin:left;transition:transform .35s cubic-bezier(.4,0,.2,1);}
+.btn-watch:hover::before{transform:scaleX(1);}
+.btn-watch:hover{color:var(--bg);}
+.btn-watch svg,.btn-watch span{position:relative;z-index:1;}
+.btn-watch svg{width:17px;height:17px;}
+.btn-divider{font-size:.65rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
+.btn-deovr{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid rgba(212,168,67,.3);color:var(--muted);font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;padding:.7rem 2.2rem;border-radius:99px;cursor:pointer;transition:border-color .2s,color .2s;text-decoration:none;}
+.btn-deovr:hover{border-color:var(--gold);color:var(--gold);}
+.btn-deovr svg{width:15px;height:15px;}
+.btn-with-desc{display:flex;flex-direction:column;align-items:center;gap:.5rem;width:100%;}
+.btn-desc{font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
+#nourl{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);text-align:center;padding:2rem;}
+#nourl.show{display:flex;}
+#nourl h2{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold);margin-bottom:1rem;}
+#nourl p{color:var(--muted);font-size:.9rem;line-height:1.8;max-width:400px;}
+#nourl code{display:block;margin-top:1rem;background:rgba(212,168,67,.08);border:1px solid var(--border);padding:.8rem 1.2rem;border-radius:.5rem;font-size:.8rem;color:var(--gold2);word-break:break-all;}
+#loading{position:fixed;inset:0;z-index:150;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;}
+#loading.on{display:flex;}
+#loading.fade{animation:fadeOut .6s forwards;}
+@keyframes fadeOut{to{opacity:0;visibility:hidden;}}
+.ring{width:50px;height:50px;border-radius:50%;border:1.5px solid rgba(212,168,67,.12);border-top-color:var(--gold);animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.ltxt{font-size:.74rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);}
+#buffering{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:97;pointer-events:none;display:none;flex-direction:column;align-items:center;gap:.6rem;}
+#buffering.show{display:flex;}
+.buf-ring{width:40px;height:40px;border-radius:50%;border:2px solid rgba(212,168,67,.2);border-top-color:var(--gold);animation:spin 1s linear infinite;}
+.buf-txt{font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(212,168,67,.6);}
+#topbar{position:fixed;top:0;left:0;right:0;z-index:100;padding:1rem 1.8rem;display:flex;align-items:center;justify-content:space-between;background:linear-gradient(to bottom,rgba(7,8,11,.85) 0%,transparent 100%);transform:translateY(-110%);transition:transform .5s ease .3s;pointer-events:none;}
+#topbar.show{transform:translateY(0);pointer-events:all;}
+.brand{font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold2);letter-spacing:.06em;display:flex;align-items:center;gap:.5rem;}
+.brand svg{width:14px;height:14px;opacity:.7;}
+.backbtn{background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:.4rem;font-family:'Outfit',sans-serif;font-size:.73rem;letter-spacing:.07em;color:var(--muted);text-transform:uppercase;transition:color .2s;}
+.backbtn:hover{color:var(--gold);}
+.backbtn svg{width:15px;height:15px;}
+.lbadge{font-size:.63rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:.4rem;}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--gold);animation:blink 2s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+#draghint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:98;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:.6rem;transition:opacity .5s;}
+#draghint.gone{opacity:0;}
+.dhc{width:58px;height:58px;border-radius:50%;border:1px solid rgba(212,168,67,.22);display:flex;align-items:center;justify-content:center;color:rgba(212,168,67,.45);animation:pulse 2.5s ease-in-out infinite;}
+.dhc svg{width:26px;height:26px;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(212,168,67,.18)}50%{box-shadow:0 0 0 18px rgba(212,168,67,0)}}
+.dhl{font-size:.63rem;letter-spacing:.18em;text-transform:uppercase;color:rgba(212,168,67,.38);}
+#hud{position:fixed;bottom:0;left:0;right:0;z-index:100;padding:0 1rem calc(.8rem + env(safe-area-inset-bottom)) 1rem;background:linear-gradient(to top,rgba(7,8,11,.7) 0%,rgba(7,8,11,0) 100%);transform:translateY(110%);transition:transform .5s ease .3s;pointer-events:none;}@media(orientation:landscape) and (max-width:1024px){#hud{padding-bottom:calc(.5rem + env(safe-area-inset-bottom));background:linear-gradient(to top,rgba(7,8,11,.6) 0%,rgba(7,8,11,0) 80%);}}
+#hud.show{transform:translateY(0);pointer-events:all;}
+.ptrack{width:100%;height:3px;background:rgba(255,255,255,.08);border-radius:2px;cursor:pointer;margin-bottom:.8rem;transition:height .15s,margin-top .15s;}
+.ptrack:hover{height:5px;margin-top:-2px;}
+.pfill{height:100%;border-radius:2px;width:0%;background:linear-gradient(90deg,var(--gold),var(--gold2));pointer-events:none;transition:width .25s linear;}
+.ctrlrow{display:flex;align-items:center;gap:.35rem;flex-wrap:nowrap;}
+.cb{background:rgba(212,168,67,.07);border:1px solid rgba(212,168,67,.17);color:var(--gold);width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .2s,transform .15s;}
+.cb:hover{background:rgba(212,168,67,.2);transform:scale(1.08);}
+.cb svg{width:14px;height:14px;}
+.cb.active{color:var(--gold2);background:rgba(212,168,67,.25);border-color:var(--gold);}
+.tbox{font-size:.72rem;font-variant-numeric:tabular-nums;color:var(--muted);white-space:nowrap;}
+.tbox b{color:var(--text);font-weight:400;}
+.sp{flex:1;min-width:0;}
+.vrow{display:flex;align-items:center;gap:.3rem;}
+input#vol{-webkit-appearance:none;appearance:none;width:52px;height:2px;background:rgba(255,255,255,.14);outline:none;cursor:pointer;border-radius:2px;}
+input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;border-radius:50%;background:var(--gold);cursor:pointer;}
+@media(max-width:390px){input#vol{width:36px;}.tbox{font-size:.62rem;}#zoom-wrap .zoom-val{display:none;}}
+/* Browser tips */
+.browser-tips{margin-top:1.6rem;animation:rise .9s .32s both;width:100%;max-width:340px;}
+.tips-toggle{display:flex;align-items:center;justify-content:center;gap:.4rem;font-size:.65rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);cursor:pointer;background:none;border:none;font-family:'Outfit',sans-serif;width:100%;padding:.3rem 0;transition:color .2s;}
+.tips-toggle:hover{color:var(--gold);}
+.tips-toggle svg{width:12px;height:12px;transition:transform .25s;}
+.tips-toggle.open svg{transform:rotate(180deg);}
+.tips-body{overflow:hidden;max-height:0;transition:max-height .35s cubic-bezier(.4,0,.2,1),opacity .3s;opacity:0;}
+.tips-body.open{max-height:200px;opacity:1;}
+.tips-grid{display:grid;grid-template-columns:1fr 1fr;gap:.45rem;padding:.7rem 0 .2rem;}
+.tip-row{display:flex;align-items:center;gap:.5rem;background:rgba(212,168,67,.04);border:1px solid rgba(212,168,67,.1);border-radius:8px;padding:.5rem .7rem;}
+.tip-ico{font-size:.95rem;flex-shrink:0;}
+.tip-info{display:flex;flex-direction:column;gap:.1rem;}
+.tip-device{font-size:.62rem;color:var(--muted);letter-spacing:.04em;}
+.tip-browser{font-size:.72rem;color:var(--text);font-weight:500;}
+.tip-best{color:var(--gold2);}
+.tips-note{font-size:.65rem;color:var(--muted);line-height:1.6;text-align:center;padding:.3rem 0 .1rem;opacity:.8;}
+.tips-note b{color:var(--gold);}
+
+#quality-badge{position:fixed;top:4.2rem;right:1.8rem;z-index:101;display:none;align-items:center;gap:.35rem;background:rgba(7,8,11,.75);border:1px solid rgba(212,168,67,.2);border-radius:99px;padding:.22rem .7rem;font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);backdrop-filter:blur(6px);transition:opacity .3s;}
+#quality-badge.show{display:flex;}
+#quality-badge .qval{color:var(--gold2);font-weight:500;}
+/* Quality menu */
+#quality-menu{position:fixed;bottom:5.5rem;right:1.8rem;z-index:102;display:none;flex-direction:column;gap:.3rem;background:rgba(10,11,16,.92);border:1px solid rgba(212,168,67,.18);border-radius:10px;padding:.5rem;backdrop-filter:blur(10px);min-width:110px;}
+#quality-menu.show{display:flex;}
+.qopt{padding:.45rem .8rem;border-radius:7px;font-size:.78rem;color:var(--muted);cursor:pointer;transition:background .15s,color .15s;white-space:nowrap;border:none;background:none;text-align:left;font-family:'Outfit',sans-serif;width:100%;}
+.qopt:hover{background:rgba(212,168,67,.1);color:var(--text);}
+.qopt.active{color:var(--gold2);background:rgba(212,168,67,.12);}
+.qopt.auto-label{font-size:.65rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding:.2rem .8rem .35rem;cursor:default;}
+.qopt.auto-label:hover{background:none;color:var(--muted);}
+.qopt.warn-4k{position:relative;}
+.qopt.warn-4k::after{content:'⚠ may buffer';font-size:.58rem;color:rgba(212,168,67,.5);display:block;margin-top:.1rem;}
+/* Zoom controls */
+#zoom-wrap{display:flex;align-items:center;gap:.2rem;}
+.cb-sm{background:rgba(212,168,67,.07);border:1px solid rgba(212,168,67,.17);color:var(--gold);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:background .2s,transform .15s;font-size:1rem;line-height:1;font-weight:300;}
+.cb-sm:hover{background:rgba(212,168,67,.2);transform:scale(1.08);}
+.zoom-val{font-size:.62rem;color:var(--muted);letter-spacing:.06em;min-width:2.4rem;text-align:center;font-variant-numeric:tabular-nums;}
+/* Quality lock indicator */
+.qopt.locked{border-left:2px solid var(--gold);padding-left:.6rem;}
 </style>
 </head>
 <body>
-<div class="app">
-<div id="setupScreen" class="setup-screen" style="display:none">
-  <div style="font-size:40px;margin-bottom:16px">👑</div>
-  <h2>VR Kings CEO Dashboard</h2>
-  <p>Для синхронізації між пристроями підключи Google Sheets. Одноразове налаштування — 5 хвилин.</p>
-  <div class="step"><div class="step-num">1</div><div class="step-text"><strong>Відкрий Google Sheets</strong> → таблиця "VR Kings CEO"</div></div>
-  <div class="step"><div class="step-num">2</div><div class="step-text"><strong>Extensions → Apps Script</strong> → вставити Code.gs → зберегти</div></div>
-  <div class="step"><div class="step-num">3</div><div class="step-text"><strong>Deploy → New deployment → Web App</strong> → Execute as: Me → Anyone → Deploy → скопіювати URL</div></div>
-  <div class="step"><div class="step-num">4</div><div class="step-text"><strong>Вставити URL нижче</strong></div></div>
-  <input class="setup-url" id="setupUrl" placeholder="https://script.google.com/macros/s/...../exec">
-  <br>
-  <button class="btn primary" onclick="connectSheet()" style="width:100%;padding:12px">Підключити та завантажити дані</button>
-  <p style="margin-top:16px;font-size:12px;color:var(--text3)">URL зберігається тільки у браузері.</p>
-</div>
+<canvas id="canvas"></canvas>
+<div id="nourl"><h2>No video link</h2><p>Add a video link to the URL like this:</p><code id="example-url"></code></div>
+<div id="splash">
+  <div class="glow"></div>
+  <div class="splash-inner">
+    <div class="tag"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>VR KINGS</div>
+    <h1 class="splash-title">Step Inside<br/><em>the 360°</em></h1>
+    <p class="splash-sub">Exclusive 360° content<br/>for VR KINGS Patrons only.</p>
+    <div class="hints">
+      <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/></svg></div>Drag mouse</div>
+      <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v4M12 18v4M8 12H4M20 12h-4"/><circle cx="12" cy="12" r="3"/></svg></div>Scroll to zoom</div>
+      <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></div>Swipe on phone</div>
+      <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg></div>VR mode</div>
+    </div>
+    <div class="btn-row-splash">
+      <div class="btn-with-desc">
+        <button class="btn-watch" onclick="launch()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg><span>Watch in Browser</span></button>
+        <div class="btn-desc">💻 Computer &amp; phone — no app needed</div>
+      </div>
+      <div class="btn-divider">or</div>
+      <div class="btn-with-desc">
+        <a class="btn-deovr" id="deovr-link" href="#" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>Open in DeoVR</a>
+        <div class="btn-desc">🥽 VR headset — best quality, full immersion</div>
+      </div>
 
-<div id="mainApp" style="display:none">
-<div class="top-bar">
-  <div style="display:flex;align-items:center;gap:10px">
-    <div><div class="logo-text">VR Kings</div><div class="logo-sub">CEO Dashboard</div></div>
-    <span id="sBadge" class="tag tn">...</span>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-    <span id="syncSt" class="sync-badge">з'єднання...</span>
-    <span id="curMonth" class="month-badge">—</span>
-    <button class="btn" onclick="showSetup()" style="font-size:12px;padding:5px 10px">⚙ Налаштування</button>
+      <!-- Browser tips -->
+      <div class="browser-tips">
+        <button class="tips-toggle" onclick="toggleTips(this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+          Which browser gives best quality?
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="tips-body" id="tips-body">
+          <div class="tips-grid">
+            <div class="tip-row">
+              <div class="tip-ico">💻</div>
+              <div class="tip-info">
+                <div class="tip-device">Desktop</div>
+                <div class="tip-browser tip-best">Chrome / Edge</div>
+              </div>
+            </div>
+            <div class="tip-row">
+              <div class="tip-ico">🤖</div>
+              <div class="tip-info">
+                <div class="tip-device">Android</div>
+                <div class="tip-browser tip-best">Chrome</div>
+              </div>
+            </div>
+            <div class="tip-row">
+              <div class="tip-ico">🍎</div>
+              <div class="tip-info">
+                <div class="tip-device">iPhone / iPad</div>
+                <div class="tip-browser tip-best">Safari</div>
+              </div>
+            </div>
+            <div class="tip-row">
+              <div class="tip-ico">🥽</div>
+              <div class="tip-info">
+                <div class="tip-device">VR Headset</div>
+                <div class="tip-browser tip-best">→ DeoVR</div>
+              </div>
+            </div>
+          </div>
+          <div class="tips-note">🥽 On Quest/Pico: open this link in headset browser,<br/>then tap <b>Open in DeoVR</b> for best VR experience</div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
-
-<div class="nav">
-  <button class="nb on" onclick="go('pulse',this)">Пульс</button>
-  <button class="nb" onclick="go('input',this)">Внести дані</button>
-  <button class="nb" onclick="go('tiers',this)">Тіри</button>
-  <button class="nb" onclick="go('dynamics',this)">Динаміка</button>
-  <button class="nb" onclick="go('funnel',this)">Воронка</button>
-  <button class="nb" onclick="go('actions',this)">Дії</button>
-  <button class="nb" onclick="go('hypo',this)">Гіпотези</button>
+<div id="loading"><div class="ring"></div><div class="ltxt">Loading…</div></div>
+<div id="buffering"><div class="buf-ring"></div><div class="buf-txt">Loading…</div></div>
+<div id="quality-badge"><span class="qval" id="qval-txt">—</span></div>
+<div id="quality-menu"></div>
+<div id="topbar">
+  <button class="backbtn" onclick="goBack()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>Back</button>
+  <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20"/></svg>VR KINGS — For Patrons</div>
+  <div class="lbadge"><span class="dot"></span>Patreon</div>
 </div>
-
-<div id="sec-pulse" class="sec on">
-  <div id="pulseAlerts"></div>
-  <div id="pulseMetrics" class="mg"></div>
-  <div class="two">
-    <div class="card"><div class="ct">Прогрес до цілей (3 міс)</div><div id="goals"></div></div>
-    <div class="card"><div class="ct">Стан каналів</div><div id="channels"></div></div>
-  </div>
-  <div class="card"><div class="ct">Тригери відкочування</div><div id="triggers"></div></div>
+<div id="draghint">
+  <div class="dhc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/></svg></div>
+  <div class="dhl">Drag to look around</div>
 </div>
+<div id="hud">
+  <div class="ptrack" id="ptrack" onclick="seekTo(event)"><div class="pfill" id="pfill"></div></div>
+  <div class="ctrlrow">
+    <button class="cb" onclick="togglePlay()"><svg id="ppico" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg></button>
+    <div class="tbox"><b id="tcur">0:00</b> / <span id="tdur">0:00</span></div>
+    <div class="sp"></div>
+    <div class="vrow">
+      <button class="cb" onclick="toggleMute()"><svg id="volico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg></button>
+      <input type="range" id="vol" min="0" max="1" step="0.05" value="1" oninput="setVol(this.value)">
+    </div>
+    <div id="zoom-wrap">
+      <button class="cb-sm" onclick="changeZoom(1)" title="Zoom in">＋</button>
+      <div class="zoom-val" id="zoom-val">75°</div>
+      <button class="cb-sm" onclick="changeZoom(-1)" title="Zoom out">－</button>
+    </div>
 
-<div id="sec-input" class="sec">
-  <div class="mnav">
-    <button class="mnb" onclick="prevMonth()">←</button>
-    <span id="inputMonthLbl" class="mlbl">—</span>
-    <button class="mnb" onclick="nextMonth()">→</button>
-    <span style="font-size:12px;color:var(--text3);margin-left:4px">Вносити 1-го за попередній місяць</span>
-  </div>
-  <div class="card">
-    <div class="ct">Patreon — підписники</div>
-    <div class="fr3">
-      <div class="field"><label class="fl">Paid active (кінець місяця)</label><input type="number" id="i_paid" oninput="qS()"></div>
-      <div class="field"><label class="fl">Нових paid за місяць</label><input type="number" id="i_new_paid" oninput="qS()"></div>
-      <div class="field"><label class="fl">Відписалось paid</label><input type="number" id="i_churned" oninput="qS()"></div>
-    </div>
-    <div class="fr3">
-      <div class="field"><label class="fl">Free members (кінець міс)</label><input type="number" id="i_free" oninput="qS()"></div>
-      <div class="field"><label class="fl">Нових free</label><input type="number" id="i_new_free" oninput="qS()"></div>
-      <div class="field"><label class="fl">Annual members</label><input type="number" id="i_annual" oninput="qS()"></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ct">Тіри — кількість active підписників <span style="font-weight:400;text-transform:none;font-size:11px">(Patreon → Insights → Membership tier)</span></div>
-    <div class="fr6">
-      <div class="field"><label class="fl">Graf $15</label><input type="number" id="i_t_graf" oninput="qS();uTC()"></div>
-      <div class="field"><label class="fl">Baron $10</label><input type="number" id="i_t_baron" oninput="qS();uTC()"></div>
-      <div class="field"><label class="fl">Knight $5</label><input type="number" id="i_t_knight" oninput="qS();uTC()"></div>
-      <div class="field"><label class="fl">Warrior $1</label><input type="number" id="i_t_warrior" oninput="qS();uTC()"></div>
-      <div class="field"><label class="fl">Lord $7 <small>(legacy)</small></label><input type="number" id="i_t_lord" oninput="qS();uTC()"></div>
-      <div class="field"><label class="fl">Prince $50</label><input type="number" id="i_t_prince" oninput="qS();uTC()"></div>
-    </div>
-    <div id="tierCalc" style="font-size:12px;color:var(--text2);margin-top:2px;padding:8px;background:var(--bg2);border-radius:var(--radius)"></div>
-  </div>
-  <div class="card">
-    <div class="ct">Фінанси — тільки Net (після всіх комісій Patreon)</div>
-    <div class="fr3">
-      <div class="field"><label class="fl">Net earnings ($) <small>з Patreon → Payouts</small></label><input type="number" id="i_net" oninput="qS()"></div>
-      <div class="field"><label class="fl">Shop gross ($)</label><input type="number" id="i_gross_shop" oninput="qS()"></div>
-      <div class="field"><label class="fl">patreon.vrkings.tv відвідувачів</label><input type="number" id="i_site_visitors" oninput="qS()"></div>
-    </div>
-    <div class="field"><label class="fl">Shop деталізація <small>що продалось цього місяця</small></label><input type="text" id="i_shop_detail" placeholder="напр. 2× Bundle $699, 1× VR Twerk Pack" oninput="qS()"></div>
-  </div>
-  <div class="card">
-    <div class="ct">Трафік</div>
-    <div class="fr3">
-      <div class="field"><label class="fl">YouTube переглядів</label><input type="number" id="i_yt_views" oninput="qS()"></div>
-      <div class="field"><label class="fl">YouTube → Patreon кліки <small>(UTM)</small></label><input type="number" id="i_yt_clicks" oninput="qS()"></div>
-      <div class="field"><label class="fl">Twitter → Patreon кліки</label><input type="number" id="i_tw_clicks" oninput="qS()"></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ct">Контент і трафік</div>
-    <div class="fr3">
-      <div class="field"><label class="fl">Відео на Patreon (шт)</label><input type="number" id="i_vids" oninput="qS()"></div>
-      <div class="field"><label class="fl">Reddit → Patreon кліки</label><input type="number" id="i_reddit_clicks" oninput="qS()"></div>
-      <div class="field"><label class="fl">Instagram → Patreon кліки</label><input type="number" id="i_ig_clicks" oninput="qS()"></div>
-    </div>
-    <div class="fr2">
-      <div class="field"><label class="fl">YouTube відео — дата <small>(якщо був реліз)</small></label><input type="text" id="i_yt_release" placeholder="напр. 15" oninput="qS()"></div>
-      <div class="field"><label class="fl">Результат poll місяця <small>(яка модель перемогла / тема)</small></label><input type="text" id="i_poll_result" placeholder="напр. Liona — VR twerk" oninput="qS()"></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ct">Нотатка до місяця</div>
-    <textarea id="i_note" placeholder="Що важливе сталося? Що спробували? Що спрацювало, що ні?" oninput="qS()"></textarea>
-  </div>
-  <span id="saveInd" class="save-ind">Зміни зберігаються автоматично</span>
-</div>
-
-<div id="sec-tiers" class="sec">
-  <div class="card"><div class="ct">Тіри — поточний місяць (active підписники)</div><div id="tierTable"></div></div>
-  <div class="two">
-    <div class="card"><div class="ct">Net по тірах ($)</div><div style="position:relative;height:200px"><canvas id="cTG"></canvas></div></div>
-    <div class="card"><div class="ct">Розподіл підписників</div><div style="position:relative;height:200px"><canvas id="cTD"></canvas></div></div>
-  </div>
-  <div class="card"><div class="ct">Динаміка тірів — 6 місяців</div><div style="position:relative;height:200px"><canvas id="cTH"></canvas></div></div>
-  <div class="card"><div class="ct">Аналіз тірів</div><div id="tierInsights"></div></div>
-</div>
-
-<div id="sec-dynamics" class="sec">
-  <div class="card"><div class="ct">Paid підписники (active)</div><div style="position:relative;height:180px"><canvas id="cPaid"></canvas></div></div>
-  <div class="two">
-    <div class="card"><div class="ct">Net earnings ($)</div><div style="position:relative;height:150px"><canvas id="cNet"></canvas></div></div>
-    <div class="card"><div class="ct">Churn rate (%)</div><div style="position:relative;height:150px"><canvas id="cChurn"></canvas></div></div>
-  </div>
-  <div class="card"><div class="ct">YouTube → Patreon кліки</div><div style="position:relative;height:130px"><canvas id="cYT"></canvas></div></div>
-  <div class="two">
-    <div class="card">
-      <div class="ct">patreon.vrkings.tv — відвідувачі/міс</div>
-      <div style="position:relative;height:130px"><canvas id="cSite"></canvas></div>
-    </div>
-    <div class="card">
-      <div class="ct">GA інсайти — що відстежуємо</div>
-      <div class="trow"><span>Звідки трафік</span><span style="font-size:12px;color:var(--text2)">YouTube · Direct · Google · Twitter · Reddit</span></div>
-      <div class="trow"><span>Конверсія кнопок</span><span style="font-size:12px;color:var(--text2)">Events → Join / Shop кліки</span></div>
-      <div class="trow"><span>Найкраща сторінка</span><span style="font-size:12px;color:var(--text2)">Яка конвертує найбільше</span></div>
-      <div class="trow"><span>Дані вносити</span><span style="font-size:12px;color:var(--text2)">1-го числа з GA → поле вище</span></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ct">Таблиця по місяцях</div>
-    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
-      <thead><tr style="border-bottom:1px solid var(--border)">
-        <th style="text-align:left;padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Місяць</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Paid</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Net $</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Shop $</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Churn %</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Нових</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Відп.</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">YT реліз</th>
-        <th style="padding:7px 8px;font-weight:600;color:var(--text3);font-size:11px;text-transform:uppercase">Poll</th>
-      </tr></thead>
-      <tbody id="historyBody"></tbody>
-    </table></div>
+    <button class="cb" onclick="toggleFS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
+    <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);" id="qual-btn">HD</button>
   </div>
 </div>
 
-<div id="sec-funnel" class="sec">
-  <div class="card"><div class="ct">Воронка — поточний місяць</div><div id="funnelSteps"></div></div>
-  <div class="two">
-    <div class="card"><div class="ct">Конверсія каналів</div><div id="convBreakdown"></div></div>
-    <div class="card"><div class="ct">Діагноз</div><div id="funnelDiag"></div></div>
-  </div>
-</div>
-
-<div id="sec-actions" class="sec">
-  <div class="card"><div class="ct">Пріоритети — автоматично на основі реальних даних</div><div id="autoActions"></div></div>
-  <div class="two">
-    <div class="card">
-      <div class="ct">Щотижневий ритм</div>
-      <div class="trow"><span>Понеділок</span><span style="font-size:12px;color:var(--text2)">Paid count у Patreon Insights (5 хв)</span></div>
-      <div class="trow"><span>П'ятниця</span><span style="font-size:12px;color:var(--text2)">GA аналітика — звідки трафік на сайт</span></div>
-      <div class="trow"><span>П'ятниця</span><span style="font-size:12px;color:var(--text2)">Нові відписки — хто, з якого тіру</span></div>
-      <div class="trow"><span>1-е числа</span><span style="font-size:12px;color:var(--text2)">Внести дані + PRINCE голосування</span></div>
-      <div class="trow"><span>15-е числа</span><span style="font-size:12px;color:var(--text2)">PRINCE thank you відео (20 сек)</span></div>
-      <div class="trow"><span>1-е числа</span><span style="font-size:12px;color:var(--text2)">CSV backup Patreon → Google Drive</span></div>
-      <div class="trow"><span>Щодня</span><span style="font-size:12px;color:var(--text2)">Twitter/X — Ігор (пости + відповіді)</span></div>
-      <div class="trow"><span>Тижнево</span><span style="font-size:12px;color:var(--text2)">Reddit r/oculusnsfw — активна участь</span></div>
-    </div>
-    <div class="card">
-      <div class="ct">Активні ризики</div>
-      <div class="sig"><div class="dot dr"></div><span>Churn 28-35% — вище таргету 15%. Головна проблема.</span></div>
-      <div class="sig"><div class="dot dg"></div><span>Twitter/X — Ігор веде активно. Ціль: +500 кліків/міс за 2 місяці.</span></div>
-      <div class="sig"><div class="dot dy"></div><span>Reddit r/oculusnsfw — 278K підписників. Починаємо рухати.</span></div>
-      <div class="sig"><div class="dot dy"></div><span>Instagram — новий канал, людина заливає відео. Відстежуємо трафік.</span></div>
-      <div class="sig"><div class="dot dy"></div><span>Annual memberships — не просуваються активно.</span></div>
-      <div class="sig"><div class="dot dy"></div><span>Google Search Console — не підключено. Показує по яких запитах знаходять сайт в Google. 10 хвилин налаштування.</span></div>
-    </div>
-  </div>
-  <div class="card">
-    <div class="ct">8 питань щомісячного звіту</div>
-    <div class="sig"><div class="dot dy"></div><span><strong>1.</strong> Paid більше чи менше? Який тір ріс, який падав?</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>2.</strong> Churn цього місяця? Таргет ≤ 15%. Де причина якщо вище?</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>3.</strong> Graf тір — скільки відписалось? Це критичний тір (68% доходу).</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>4.</strong> Net earnings — більше чи менше? Чому?</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>5.</strong> Shop Bundle продажів? Якщо 0 — змінити CTA.</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>6.</strong> YouTube UTM: який pinned comment конвертував краще?</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>7.</strong> Prince кити: всі 10 активні? Хтось відписався — чому?</span></div>
-    <div class="sig"><div class="dot dy"></div><span><strong>8.</strong> Нова модель цього місяця? Якщо ні — коли наступна?</span></div>
-  </div>
-</div>
-
-<div id="sec-hypo" class="sec">
-  <div class="card">
-    <div class="ct">Нова гіпотеза</div>
-    <div class="field"><label class="fl">Назва</label><input type="text" id="h_title" placeholder="Pinned comment variant 2 конвертує краще"></div>
-    <div class="fr2">
-      <div class="field"><label class="fl">Що тестуємо</label><textarea id="h_what" placeholder="Що змінюємо?"></textarea></div>
-      <div class="field"><label class="fl">Очікуємо</label><textarea id="h_expect" placeholder="Яку зміну і за скільки?"></textarea></div>
-    </div>
-    <div class="fr2">
-      <div class="field"><label class="fl">Метрика</label><input type="text" id="h_metric" placeholder="YT → Patreon кліки / тиждень"></div>
-      <div class="field"><label class="fl">Дедлайн</label><input type="text" id="h_deadline" placeholder="Через 4 тижні"></div>
-    </div>
-    <div class="field"><label class="fl">Результат</label><textarea id="h_result" placeholder="Що реально вийшло? Цифри."></textarea></div>
-    <div class="field"><label class="fl">Статус</label>
-      <select id="h_status">
-        <option value="testing">В тестуванні</option><option value="confirmed">Підтверджено ✓</option><option value="rejected">Відкинуто</option><option value="paused">Пауза</option>
-      </select>
-    </div>
-    <button class="btn primary" onclick="addHypo()">Додати гіпотезу</button>
-  </div>
-  <div id="hypoList"></div>
-</div>
-</div>
-</div>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script>
-const MUA=['Січень','Лютий','Березень','Квітень','Травень','Червень','Липень','Серпень','Вересень','Жовтень','Листопад','Грудень'];
-const TIERS=['graf','baron','knight','warrior','lord','prince'];
-const TPRICES={graf:15,baron:10,knight:5,warrior:1,lord:7,prince:50};
-const TNAMES={graf:'Graf $15',baron:'Baron $10',knight:'Knight $5',warrior:'Warrior $1',lord:'Lord $7 ⚡',prince:'Prince $50'};
-const TCOLORS={graf:'#1D9E75',baron:'#5DCAA5',knight:'#85B7EB',warrior:'#B4B2A9',lord:'#FAC775',prince:'#EF9F27'};
-const FIELDS=['paid','new_paid','churned','free','new_free','annual','net','gross_shop','shop_detail','site_visitors','yt_views','yt_clicks','yt_release','tw_clicks','reddit_clicks','ig_clicks','vids','poll_result','t_graf','t_baron','t_knight','t_warrior','t_lord','t_prince'];
-const SL={testing:'В тестуванні',confirmed:'Підтверджено ✓',rejected:'Відкинуто',paused:'Пауза'};
-const SC={testing:'ty',confirmed:'tg',rejected:'tr',paused:'tn'};
-
-// РЕАЛЬНІ ДАНІ З PATREON (оновлено червень 2026)
-const SEED=[
-  {key:'2025-12',paid:477,new_paid:168,churned:131,free:2357,new_free:179,annual:14,net:6411,gross_shop:750,bundle_sales:1,yt_views:1350000,yt_clicks:50,tw_clicks:0,vids:18,newmodel:1,t_graf:319,t_baron:71,t_knight:44,t_warrior:20,t_lord:14,t_prince:9,note:'Пік — найкращий місяць. Нова модель листопад дала ефект.'},
-  {key:'2026-01',paid:470,new_paid:157,churned:158,free:2469,new_free:189,annual:15,net:5491,gross_shop:680,bundle_sales:1,yt_views:1300000,yt_clicks:46,tw_clicks:0,vids:16,newmodel:0,t_graf:307,t_baron:70,t_knight:43,t_warrior:24,t_lord:15,t_prince:11,note:'Post-holiday drop.'},
-  {key:'2026-02',paid:440,new_paid:139,churned:163,free:2556,new_free:184,annual:14,net:5274,gross_shop:620,bundle_sales:1,yt_views:1280000,yt_clicks:45,tw_clicks:0,vids:15,newmodel:0,t_graf:290,t_baron:69,t_knight:43,t_warrior:16,t_lord:14,t_prince:8,note:''},
-  {key:'2026-03',paid:469,new_paid:158,churned:122,free:2655,new_free:187,annual:15,net:5482,gross_shop:660,bundle_sales:1,yt_views:1300000,yt_clicks:46,tw_clicks:0,vids:16,newmodel:0,t_graf:296,t_baron:87,t_knight:43,t_warrior:22,t_lord:13,t_prince:8,note:''},
-  {key:'2026-04',paid:459,new_paid:154,churned:158,free:2911,new_free:378,annual:18,net:5366,gross_shop:640,bundle_sales:1,yt_views:1308667,yt_clicks:46,tw_clicks:0,vids:15,newmodel:0,t_graf:298,t_baron:68,t_knight:47,t_warrior:25,t_lord:12,t_prince:9,note:'Рекордний приплив free members.'},
-  {key:'2026-05',paid:508,new_paid:204,churned:147,free:2979,new_free:194,annual:17,net:6379,gross_shop:640,bundle_sales:1,yt_views:1300000,yt_clicks:46,tw_clicks:0,vids:16,newmodel:0,t_graf:340,t_baron:77,t_knight:43,t_warrior:26,t_lord:12,t_prince:10,note:'Web Player. Нова структура. Charge Upfront. Рекорд нових paid.'}
-];
-
-let months={},hypos=[],editKey='',chts={},scriptUrl='',saveT=null;
-
-function now(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
-function k2l(k){const[y,m]=k.split('-');return MUA[parseInt(m)-1]+' '+y;}
-function allKeys(){return Object.keys(months).sort();}
-function lk(){const k=allKeys();return k.length?k[k.length-1]:'';}
-function cr(d){
-  if(!d||!d.new_paid||!d.churned)return null;
-  const start=(d.paid||0)+(d.churned||0)-(d.new_paid||0);
-  if(!start||start<=0)return null;
-  return Math.round((d.churned/start)*100);
-}
-function tNet(d,t){return(d['t_'+t]||0)*TPRICES[t];}
-function totalTierNet(d){return TIERS.reduce((a,t)=>a+tNet(d,t),0);}
-function mcC(v,g,b,inv){
-  if(v===null||v===undefined)return'';
-  if(inv){if(v<=g)return'ok';if(v>=b)return'bad';return'warn';}
-  if(v>=g)return'ok';if(v<=b)return'bad';return'warn';
-}
-function setSS(cls,txt){const e=document.getElementById('syncSt');e.className='sync-badge'+(cls?' '+cls:'');e.textContent=txt;}
-
-async function apiFetch(action,body){
-  if(!scriptUrl)throw new Error('No URL');
-  const r=await fetch(scriptUrl+'?action='+action,{method:'POST',body:JSON.stringify({action,...body})});
-  return r.json();
+function getVideoURL() {
+  const params = new URLSearchParams(window.location.search);
+  let url = params.get('v');
+  if (!url) return null;
+  if (url.includes('.m3u8') || url.includes('b-cdn.net')) return url;
+  url = url.replace('www.dropbox.com', 'dl.dropboxusercontent.com');
+  url = url.replace('?dl=0', '?dl=1').replace('&dl=0', '&dl=1');
+  if (!url.includes('dl=1') && !url.includes('raw=1')) url += (url.includes('?') ? '&' : '?') + 'dl=1';
+  return url;
 }
 
-async function loadData(){
-  setSS('saving','завантаження...');
-  months={};SEED.forEach(s=>{months[s.key]={...s};});
-  try{
-    const d=await apiFetch('getAll',{});
-    if(d.months)Object.assign(months,d.months);
-    if(d.hypos)hypos=d.hypos;
-    setSS('ok','синхронізовано ✓');
-  }catch(e){setSS('err','офлайн — локальні дані');}
-  editKey=now();
-  renderPulse();
-  document.getElementById('curMonth').textContent=k2l(lk());
+const VIDEO_URL = getVideoURL();
+const VIDEO_TYPE = new URLSearchParams(window.location.search).get('type') || '360'; // '180' or '360'
+const IS_180 = VIDEO_TYPE === '180';
+
+if (!VIDEO_URL) {
+  document.getElementById('nourl').classList.add('show');
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
+} else {
+  // DeoVR — два сценарії:
+  // 1. Окуляри відкривають плеєр у браузері → кнопка "Open in DeoVR" → deep link deovr://
+  // 2. DeoVR app → Browser → відкриває deo.json URL напряму → отримує чистий JSON
+  //
+  // ПРАВИЛЬНИЙ ФОРМАТ: deovr://https://... веде на deo.html?deovr=1
+  // Коли DeoVR відкриває цю сторінку — UA містить "deovr", сторінка повертає JSON через document.write
+  // АБО: передаємо URL відео напряму через deovr:// (якщо відео mp4, не HLS)
+
+  // Vercel API → чистий JSON з правильним Content-Type → DeoVR грає як справжнє VR
+  const VERCEL_API = 'https://deovr-api.vrkings-r.workers.dev/';
+  const deoParams = '?v=' + encodeURIComponent(VIDEO_URL)
+    + '&type=' + (IS_180 ? 'sbs' : '360')
+    + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
+
+  const deoJsonUrl = VERCEL_API + deoParams;
+  const deepLink = 'deovr://' + deoJsonUrl;
+
+  const deoLinkEl = document.getElementById('deovr-link');
+  deoLinkEl.href = deepLink;
+  deoLinkEl.target = '_self';
+  deoLinkEl.onclick = function(e) {
+    e.preventDefault();
+    window.location.href = deepLink;
+  };
 }
 
-async function saveMonthRemote(key){
-  try{setSS('saving','збереження...');await apiFetch('saveMonth',{key,data:months[key]});setSS('ok','збережено ✓');setTimeout(()=>setSS('ok','синхронізовано ✓'),2000);}
-  catch(e){setSS('err','помилка збереження');}
-}
-async function saveHyposRemote(){try{await apiFetch('saveHypos',{hypos});}catch(e){}}
 
-function readInput(){
-  const k=editKey;if(!months[k])months[k]={key:k};
-  FIELDS.forEach(f=>{const el=document.getElementById('i_'+f);if(el&&el.value!=='')months[k][f]=parseFloat(el.value)||0;});
-  months[k].note=document.getElementById('i_note').value;months[k].key=k;
+
+let renderer, scene, camera, videoTexture, video;
+let lon = -90, lat = 0;
+let isDragging = false, prevX = 0, prevY = 0;
+let hintTimer, playerActive = false;
+let currentFov = 75;
+let hlsInstance = null;   // FIX: moved from initThree() — goBack() needs top-scope access
+const FOV_MIN = 30, FOV_MAX = 100, FOV_STEP = 5;
+
+function changeZoom(dir) {
+  // dir: +1 = zoom in (smaller fov), -1 = zoom out (larger fov)
+  currentFov = Math.max(FOV_MIN, Math.min(FOV_MAX, currentFov - dir * FOV_STEP));
+  if (camera) camera.fov = currentFov;
+  if (camera) camera.updateProjectionMatrix();
+  document.getElementById('zoom-val').textContent = currentFov + '°';
 }
 
-function qS(){
-  readInput();uTC();
-  document.getElementById('saveInd').textContent='Зберігається...';
-  if(saveT)clearTimeout(saveT);
-  saveT=setTimeout(async()=>{await saveMonthRemote(editKey);document.getElementById('saveInd').textContent='Збережено ✓';renderPulse();},1500);
-}
+// Mouse wheel zoom
+window.addEventListener('wheel', e => {
+  if (!playerActive) return;
+  e.preventDefault();
+  changeZoom(e.deltaY < 0 ? 1 : -1);
+}, { passive: false });
 
-function uTC(){
-  const vals=TIERS.map(t=>{const e=document.getElementById('i_t_'+t);return e?parseFloat(e.value)||0:0;});
-  const total=vals.reduce((a,b)=>a+b,0);
-  const gross=TIERS.reduce((a,t,i)=>a+vals[i]*TPRICES[t],0);
-  if(total>0){
-    const grafPct=vals[0]?Math.round((vals[0]*15/gross)*100):0;
-    document.getElementById('tierCalc').innerHTML=`Розрахунковий gross підписки: <strong>$${gross.toLocaleString()}</strong> · Підписників: <strong>${total}</strong> · Graf дає: <strong>${grafPct}% доходу</strong>`;
+// Pinch-to-zoom (touch)
+let lastPinchDist = null;
+window.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) lastPinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+}, { passive: true });
+window.addEventListener('touchmove', e => {
+  if (e.touches.length === 2 && lastPinchDist !== null) {
+    const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    const delta = lastPinchDist - dist;
+    if (Math.abs(delta) > 8) { changeZoom(delta > 0 ? -1 : 1); lastPinchDist = dist; }
   }
-}
+}, { passive: true });
+window.addEventListener('touchend', () => { if (event.touches.length < 2) lastPinchDist = null; }, { passive: true });
 
-function loadInput(){
-  document.getElementById('inputMonthLbl').textContent=k2l(editKey);
-  const d=months[editKey]||{};
-  FIELDS.forEach(f=>{const el=document.getElementById('i_'+f);if(el)el.value=(d[f]!==undefined&&d[f]!==0)?d[f]:'';});
-  document.getElementById('i_note').value=d.note||'';
-  uTC();
-  document.getElementById('saveInd').textContent='Зміни зберігаються автоматично';
-}
+function initThree() {
+  const canvas = document.getElementById('canvas');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(currentFov, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-function prevMonth(){const[y,m]=editKey.split('-');let mo=parseInt(m)-1,yr=parseInt(y);if(mo<1){mo=12;yr--;}editKey=yr+'-'+String(mo).padStart(2,'0');loadInput();}
-function nextMonth(){const[y,m]=editKey.split('-');let mo=parseInt(m)+1,yr=parseInt(y);if(mo>12){mo=1;yr++;}editKey=yr+'-'+String(mo).padStart(2,'0');loadInput();}
-
-function go(id,btn){
-  document.querySelectorAll('.sec').forEach(s=>s.classList.remove('on'));
-  document.querySelectorAll('.nb').forEach(b=>b.classList.remove('on'));
-  document.getElementById('sec-'+id).classList.add('on');
-  btn.classList.add('on');
-  ({pulse:renderPulse,input:loadInput,tiers:renderTiers,dynamics:renderDynamics,funnel:renderFunnel,actions:renderActions,hypo:renderHypos})[id]?.();
-}
-
-function renderPulse(){
-  const k=lk(),d=months[k]||{};
-  const keys=allKeys(),pk=keys.length>1?keys[keys.length-2]:null,pd=pk?months[pk]:{};
-  document.getElementById('curMonth').textContent=k2l(k||now());
-  const c=cr(d);
-  const paidOk=(d.paid||0)>=500,netOk=(d.net||0)>=6000,churnOk=c===null||c<=20;
-  const allOk=paidOk&&netOk&&churnOk;
-  const anyCrit=(d.paid||0)<380||(d.net||0)<4500;
-  const sb=document.getElementById('sBadge');
-  if(allOk){sb.className='tag tg';sb.textContent='Норма';}
-  else if(anyCrit){sb.className='tag tr';sb.textContent='Критично';}
-  else{sb.className='tag ty';sb.textContent='Увага';}
-  const pD=pd.paid!=null?(d.paid||0)-(pd.paid||0):null;
-  const nD=pd.net!=null?(d.net||0)-(pd.net||0):null;
-  document.getElementById('pulseMetrics').innerHTML=`
-    <div class="mc ${mcC(d.paid,500,380)}"><div class="ml">Paid active</div><div class="mv">${d.paid||'—'}</div><div class="ms">${pD!=null?(pD>=0?'▲ +'+pD:'▼ '+pD)+' від поп. міс':'введи дані'}</div></div>
-    <div class="mc ${mcC(d.net,6000,4500)}"><div class="ml">Net / міс</div><div class="mv">$${d.net?d.net.toLocaleString():'—'}</div><div class="ms">${nD!=null?(nD>=0?'+$'+nD:'−$'+Math.abs(nD))+' від поп. міс':''}</div></div>
-    <div class="mc ${mcC(c,0,20,true)}"><div class="ml">Churn rate</div><div class="mv">${c!=null?c+'%':'—'}</div><div class="ms">% від paid на початку місяця · таргет ≤ 15%</div></div>
-    <div class="mc ${mcC(d.yt_clicks,100,30)}"><div class="ml">YT → Patreon</div><div class="mv">${d.yt_clicks||'—'}</div><div class="ms">кліків / міс</div></div>
-    <div class="mc ${mcC(d.gross_shop,1200,400)}"><div class="ml">Shop / міс</div><div class="mv">$${d.gross_shop||'—'}</div><div class="ms">${d.shop_detail||'деталі не внесені'}</div></div>
-    <div class="mc ${mcC(d.t_prince,10,8)}"><div class="ml">Prince кити</div><div class="mv">${d.t_prince||'—'}</div><div class="ms">по $50/міс · ${(d.t_prince||0)*50}$ разом</div></div>
-  `;
-  document.getElementById('goals').innerHTML=`
-    <div class="bw"><div class="bm"><span>Paid (ціль 600)</span><span>${d.paid||0}/600</span></div><div class="bt"><div class="bf" style="width:${Math.min(100,Math.round(((d.paid||0)/600)*100))}%;background:#1D9E75"></div></div></div>
-    <div class="bw"><div class="bm"><span>Net/міс (ціль $10,000)</span><span>$${d.net||0}/$10,000</span></div><div class="bt"><div class="bf" style="width:${Math.min(100,Math.round(((d.net||0)/10000)*100))}%;background:#1D9E75"></div></div></div>
-    <div class="bw"><div class="bm"><span>Churn (ціль ≤ 15%)</span><span>${c!=null?c+'%':'?'} — зараз критично</span></div><div class="bt"><div class="bf" style="width:${c!=null?Math.min(100,Math.round((c/90)*100)):0}%;background:${c&&c<=15?'#1D9E75':c&&c<=25?'#EF9F27':'#D85A30'}"></div></div></div>
-    <div class="bw"><div class="bm"><span>Shop (ціль $1,500)</span><span>$${d.gross_shop||0}/$1,500</span></div><div class="bt"><div class="bf" style="width:${Math.min(100,Math.round(((d.gross_shop||0)/1500)*100))}%;background:#1D9E75"></div></div></div>
-  `;
-  document.getElementById('channels').innerHTML=`
-    <div class="trow"><span>YouTube CTA</span><span><span class="tag ${(d.yt_clicks||0)>=100?'tg':(d.yt_clicks||0)>=50?'ty':'tr'}">${(d.yt_clicks||0)>=100?'Добре':(d.yt_clicks||0)>=50?'Слабо':'Критично'}</span></span></div>
-    <div class="trow"><span>Twitter/X</span><span><span class="tag ${(d.tw_clicks||0)>=200?'tg':(d.tw_clicks||0)>=50?'ty':'ty'}">${(d.tw_clicks||0)>=200?'Активний':(d.tw_clicks||0)>=50?'Слабо':'Розігрівається'}</span></span></div>
-    <div class="trow"><span>Reddit r/oculusnsfw</span><span><span class="tag ${(d.reddit_clicks||0)>=50?'tg':(d.reddit_clicks||0)>=10?'ty':'tn'}">${(d.reddit_clicks||0)>=50?'Активний':(d.reddit_clicks||0)>=10?'Є трафік':d.reddit_clicks?d.reddit_clicks+' кліків':'Запускаємо'}</span></span></div>
-    <div class="trow"><span>Instagram</span><span><span class="tag ${(d.ig_clicks||0)>=50?'tg':(d.ig_clicks||0)>=10?'ty':'ty'}">${(d.ig_clicks||0)>=50?'Активний':(d.ig_clicks||0)>=10?'Є трафік':'Розігрівається'}</span></span></div>
-    <div class="trow"><span>Контент</span><span><span class="tag ${(d.vids||0)>=16?'tg':(d.vids||0)>=12?'ty':'tr'}">${d.vids||0} відео/міс</span></span></div>
-    <div class="trow"><span>Annual members</span><span><span class="tag ${(d.annual||0)>=20?'tg':'ty'}">${d.annual||0} людей</span></span></div>
-    <div class="trow"><span>Poll місяця</span><span><span class="tag tn" style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${d.poll_result||'Не проводився'}</span></span></div>
-  `;
-  const tp=d.paid||0;
-  document.getElementById('triggers').innerHTML=`
-    <div class="trow"><span><span class="tag ${tp>=480?'tn':'ty'}">ЖОВТИЙ</span> Paid &lt; 480</span><span style="font-size:12px;color:var(--text2)">${tp>=480?'✓ Норма':'⚠ Посилити Okoa + YT CTA'}</span></div>
-    <div class="trow"><span><span class="tag ${tp>=380?'tn':'tr'}">ЧЕРВОНИЙ</span> Paid &lt; 380</span><span style="font-size:12px;color:var(--text2)">${tp>=380?'✓ Норма':'🚨 Повертаємо бібліотеку $15'}</span></div>
-    <div class="trow"><span><span class="tag ${tp>=320?'tn':'tr'}">КРИТИЧНИЙ</span> Paid &lt; 320</span><span style="font-size:12px;color:var(--text2)">${tp>=320?'✓ Норма':'🚨 Повне відкочування'}</span></div>
-  `;
-  const alts=[];
-  if(c!=null&&c>25)alts.push({t:'red',m:`Churn ${c}% — реальна базова цифра 28-35%/міс. Таргет 15%. Причини невідомі. Запусти exit survey в Patreon → Surveys.`});
-  if(tp<480)alts.push({t:'amber',m:`Paid ${tp} — нижче 480. Okoa для free members. Pinned comments. YT CTA голосом.`});
-  if((d.yt_clicks||0)<50)alts.push({t:'amber',m:`YouTube → Patreon лише ${d.yt_clicks||0} кліків. CTA голосом у нових відео.`});
-  if(!d.poll_result)alts.push({t:'amber',m:'Poll цього місяця не проводився. Запусти опитування — яка модель наступна?'});
-  if(!alts.length)alts.push({t:'green',m:'Метрики в нормі. Фокус: знизити churn нижче 25% і Bundle CTA в кожному пості.'});
-  document.getElementById('pulseAlerts').innerHTML=alts.map(a=>`<div class="ab-box ${a.t}">${a.m}</div>`).join('');
-}
-
-function renderTiers(){
-  const k=lk(),d=months[k]||{};
-  const keys=allKeys(),pk=keys.length>1?keys[keys.length-2]:null,pd=pk?months[pk]:{};
-  const totalSubs=TIERS.reduce((a,t)=>a+(d['t_'+t]||0),0)||1;
-  const totalG=totalTierNet(d)||1;
-  let rows='<div class="tier-hdr"><span>Тір</span><span>Підписники</span><span style="text-align:right">Est. Net $</span><span style="text-align:right">% $</span><span style="text-align:right">Зміна</span></div>';
-  TIERS.forEach(t=>{
-    const cnt=d['t_'+t]||0,g=tNet(d,t),pct=Math.round((g/totalG)*100);
-    const diff=pk?(cnt-(pd['t_'+t]||0)):null;
-    const ds=diff!=null?(diff>0?`<span style="color:#1D9E75">+${diff}</span>`:diff<0?`<span style="color:#D85A30">${diff}</span>`:'<span style="color:var(--text3)">—</span>'):'<span style="color:var(--text3)">—</span>';
-    rows+=`<div class="tier-grid"><span style="font-weight:500">${TNAMES[t]}</span><div><div class="tier-bar-wrap"><div class="tier-bar" style="width:${Math.round((cnt/totalSubs)*100)}%;background:${TCOLORS[t]}"></div></div><span style="font-size:11px;color:var(--text2)">${cnt} підп.</span></div><span style="text-align:right;font-weight:500">$${g.toLocaleString()}</span><span style="text-align:right;color:var(--text2)">${pct}%</span><span style="text-align:right">${ds}</span></div>`;
+  video = document.createElement('video');
+  video.crossOrigin = 'anonymous';
+  video.loop = true;
+  video.playsInline = true;
+  video.muted = true; // FIX: muted required for autoplay on iOS/Android
+  video.setAttribute('webkit-playsinline', '');
+  video.addEventListener('loadedmetadata', () => { document.getElementById('tdur').textContent = fmt(video.duration); });
+  video.addEventListener('timeupdate', updateProgress);
+  video.addEventListener('canplay', onCanPlay, { once: true });
+  video.addEventListener('waiting', () => document.getElementById('buffering').classList.add('show'));
+  video.addEventListener('playing', () => {
+    document.getElementById('buffering').classList.remove('show');
+    // Unmute after first play starts (user already interacted via launch button)
+    if (video.muted) {
+      video.muted = false;
+      document.getElementById('vol').value = 1;
+    }
   });
-  rows+=`<div class="tier-grid" style="font-weight:600;border-top:1px solid var(--border2);margin-top:4px"><span>Разом</span><span style="font-size:12px">${totalSubs}</span><span style="text-align:right">$${totalG.toLocaleString()}</span><span></span><span></span></div>`;
-  document.getElementById('tierTable').innerHTML=rows;
-  mkC('cTG',TIERS.map(t=>TNAMES[t]),TIERS.map(t=>tNet(d,t)),'bar',TIERS.map(t=>TCOLORS[t]));
-  if(chts.cTD)chts.cTD.destroy();
-  chts.cTD=new Chart(document.getElementById('cTD'),{type:'doughnut',data:{labels:TIERS.map(t=>TNAMES[t]),datasets:[{data:TIERS.map(t=>d['t_'+t]||0),backgroundColor:TIERS.map(t=>TCOLORS[t]),borderWidth:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{font:{size:10},boxWidth:10}}}}});
-  const hKeys=allKeys().slice(-6);
-  if(chts.cTH)chts.cTH.destroy();
-  chts.cTH=new Chart(document.getElementById('cTH'),{type:'bar',data:{labels:hKeys.map(k=>k2l(k).replace(' 20','\'')),datasets:TIERS.map(t=>({label:TNAMES[t],data:hKeys.map(k=>months[k]?.['t_'+t]||0),backgroundColor:TCOLORS[t],stack:'s'}))},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:10}}},scales:{x:{stacked:true,ticks:{font:{size:10}}},y:{stacked:true,ticks:{font:{size:10}}}}}});
-  const ins=[];
-  const grafG=tNet(d,'graf'),grafPct=Math.round((grafG/totalG)*100);
-  ins.push({dot:'dy',text:`Graf дає ${grafPct}% всього доходу (${d['t_graf']||0} людей × $15 = $${grafG}). Це і сила і вразливість — окремо відстежуй churn саме Graf тіру.`});
-  if((d.t_prince||0)<10)ins.push({dot:'dr',text:`Prince кити: лише ${d.t_prince||0}. Були 11, стало менше. Кожна відписка Prince = -$50/міс. Знаєш хто і чому пішов?`});
-  else ins.push({dot:'dg',text:`Prince: ${d.t_prince||0} китів × $50 = $${(d.t_prince||0)*50}/міс.`});
-  if((d.t_lord||0)>0)ins.push({dot:'dy',text:`Lord $7 legacy: ${d.t_lord||0} людей. Це гранфазеровані члени. Поступово переходять на Baron $10 або відписуються.`});
-  document.getElementById('tierInsights').innerHTML=ins.map(x=>`<div class="sig"><div class="dot ${x.dot}"></div><span>${x.text}</span></div>`).join('');
-}
+  video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
 
-function mkC(id,labels,vals,type,colors){
-  if(chts[id])chts[id].destroy();
-  const ctx=document.getElementById(id);if(!ctx)return;
-  const isBar=type==='bar';
-  const color=Array.isArray(colors)?colors:'#1D9E75';
-  chts[id]=new Chart(ctx,{type:type||'line',data:{labels,datasets:[{data:vals,borderColor:isBar?undefined:(Array.isArray(color)?color[0]:color),backgroundColor:isBar?color:(Array.isArray(color)?color[0]:color)+'20',fill:!isBar,tension:0.3,pointRadius:3,borderWidth:2,spanGaps:true,borderRadius:isBar?4:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:10},maxRotation:45,autoSkip:false}},y:{ticks:{font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}}}}});
-}
 
-function renderDynamics(){
-  const keys=allKeys();
-  const labels=keys.map(k=>k2l(k).replace(' 20','\''));
-  mkC('cPaid',labels,keys.map(k=>months[k]?.paid||null));
-  // Позначки YouTube релізів на графіку
-  const ytReleaseMonths=keys.filter(k=>months[k]?.yt_release);
-  if(ytReleaseMonths.length&&chts.cPaid){
-    // додаємо легенду під графіком
-    const ytLegend=ytReleaseMonths.map(k=>`📹 ${k2l(k)}: ${months[k].yt_release}`).join(' · ');
-    const existingNote=document.getElementById('ytReleaseNote');
-    if(existingNote)existingNote.remove();
-    const note=document.createElement('div');
-    note.id='ytReleaseNote';
-    note.style.cssText='font-size:11px;color:var(--text2);padding:6px 0;';
-    note.textContent='YouTube релізи: '+ytLegend;
-    document.querySelector('#sec-dynamics .card').appendChild(note);
+  if (VIDEO_URL.includes('.m3u8')) {
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // ── Safari / iOS native HLS ──────────────────────────────────────────
+      // Safari picks quality itself. Best we can do: load, then on manifest
+      // parsed force highest rendition via textTracks hack isn't available,
+      // but we CAN detect what resolution is actually playing and show it.
+      video.src = VIDEO_URL;
+      // Poll actual video dimensions once playing — tells us real quality
+      video.addEventListener('playing', updateNativeQualityBadge);
+      video.addEventListener('resize',  updateNativeQualityBadge);
+    } else if (Hls.isSupported()) {
+      // ── hls.js (Chrome, Firefox, Android) ───────────────────────────────
+      hlsInstance = new Hls({
+        enableWorker: true,
+        autoStartLoad: true,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        maxBufferSize: 120 * 1000 * 1000,
+        // FIX: start at highest quality immediately, don't ramp up slowly
+        startLevel: -1,           // -1 = auto pick best for first segment
+        abrEwmaDefaultEstimate: 20000000, // assume 20Mbps initially → picks high quality
+        capLevelToPlayerSize: false,
+      });
+      hlsInstance.loadSource(VIDEO_URL);
+      hlsInstance.attachMedia(video);
+
+      // Once manifest is loaded, force max level & build quality menu
+      hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+        // Force highest level right away
+        hlsInstance.currentLevel = hlsInstance.levels.length - 1;
+        buildQualityMenu(hlsInstance);
+        document.getElementById('qual-btn').style.display = 'flex';
+        document.getElementById('quality-badge').classList.add('show');
+      });
+
+      // Update badge when level switches
+      hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+        updateHlsQualityBadge(hlsInstance, data.level);
+      });
+    }
+  } else {
+    video.src = VIDEO_URL;
+    video.load();
+    video.addEventListener('playing', updateNativeQualityBadge);
+    video.addEventListener('resize',  updateNativeQualityBadge);
   }
-  mkC('cNet',labels,keys.map(k=>months[k]?.net||null),'line','#378ADD');
-  mkC('cChurn',labels,keys.map(k=>cr(months[k])),'line','#D85A30');
-  mkC('cYT',labels,keys.map(k=>months[k]?.yt_clicks||null),'bar','#EF9F27');
-  mkC('cSite',labels,keys.map(k=>months[k]?.site_visitors||null),'bar','#378ADD');
-  const lkey=lk();
-  document.getElementById('historyBody').innerHTML=keys.slice().reverse().map(k=>{
-    const d=months[k]||{},c=cr(d);
-    return`<tr style="${k===lkey?'background:var(--bg2);font-weight:500':''}">
-      <td style="padding:7px 8px">${k2l(k)}</td>
-      <td style="text-align:center;padding:7px 8px">${d.paid||'—'}</td>
-      <td style="text-align:center;padding:7px 8px">${d.net?'$'+d.net.toLocaleString():'—'}</td>
-      <td style="text-align:center;padding:7px 8px">${d.gross_shop?'$'+d.gross_shop:'—'}</td>
-      <td style="text-align:center;padding:7px 8px;color:${c==null?'inherit':c<=15?'#1D9E75':c<=25?'#854F0B':'#993C1D'}">${c!=null?c+'%':'—'}</td>
-      <td style="text-align:center;padding:7px 8px">${d.new_paid||'—'}</td>
-      <td style="text-align:center;padding:7px 8px">${d.churned||'—'}</td>
-      <td style="text-align:center;padding:7px 8px">${d.yt_release?'📹 '+d.yt_release:'—'}</td>
-      <td style="text-align:center;padding:7px 8px;font-size:11px;color:var(--text2)">${d.poll_result||'—'}</td>
-    </tr>`;
-  }).join('');
+
+  // FIX: Use RGBAFormat instead of deprecated RGBFormat (removed in newer Three.js builds)
+  videoTexture = new THREE.VideoTexture(video);
+  videoTexture.minFilter = THREE.LinearFilter;
+  videoTexture.magFilter = THREE.LinearFilter;
+  videoTexture.format = THREE.RGBAFormat;
+
+  // FIX: 180° SBS — use only left half of UV (left eye), render on hemisphere
+  // 360° — full sphere as before
+  let geo;
+  if (IS_180) {
+    geo = buildHemi180Geometry();
+  } else {
+    geo = new THREE.SphereGeometry(500, 128, 64);
+    geo.scale(-1, 1, 1);
+  }
+
+  scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+  animate();
 }
 
-function renderFunnel(){
-  const k=lk(),d=months[k]||{};
-  const ytv=d.yt_views||0,ytc=d.yt_clicks||0,tw=d.tw_clicks||0;
-  const conv=ytv?((ytc/ytv)*100).toFixed(3):0;
-  document.getElementById('funnelSteps').innerHTML=`
-    <div class="fn-step"><div class="fn">${ytv?Math.round(ytv/1000)+'K':'—'}</div><div class="fi"><div class="ft">YouTube переглядів/міс</div><div class="fsub">46% мобільний · 32% ТВ (не бачать опис)</div></div><span class="tag tn">100%</span></div>
-    <div class="fn-step"><div class="fn">${ytv?Math.round(ytv*0.257/1000)+'K':'—'}</div><div class="fi"><div class="ft">Унікальних глядачів</div><div class="fsub">89% чол · 25-34</div></div><span class="tag tn">25.7%</span></div>
-    <div class="fn-step"><div class="fn" style="color:${ytc<100?'#D85A30':ytc<300?'#EF9F27':'#1D9E75'}">${ytc+tw}</div><div class="fi"><div class="ft">Кліків на Patreon (YT+TW)</div><div class="fsub">YouTube: ${ytc} · Twitter: ${tw}</div></div><span class="tag ${parseFloat(conv)<0.01?'tr':parseFloat(conv)<0.05?'ty':'tg'}">${conv}%</span></div>
-    <div class="fn-step"><div class="fn" style="color:#1D9E75">${d.new_paid||'—'}</div><div class="fi"><div class="ft">Нових paid / міс (факт)</div><div class="fsub">Відписалось: ${d.churned||'—'} · Net: ${d.new_paid&&d.churned?d.new_paid-d.churned:''}</div></div><span class="tag tn">факт</span></div>
-  `;
-  document.getElementById('convBreakdown').innerHTML=`
-    <div class="trow"><span>YouTube кліки</span><span style="color:${ytc<50?'#D85A30':ytc<150?'#EF9F27':'#1D9E75'};font-weight:500">${ytc}/міс</span></div>
-    <div class="trow"><span>Twitter кліки</span><span style="color:${tw<100?'#D85A30':tw<300?'#EF9F27':'#1D9E75'};font-weight:500">${tw}/міс</span></div>
-    <div class="trow"><span>Нових paid всього</span><span style="font-weight:500">${d.new_paid||0}/міс</span></div>
-    <div class="trow"><span>Відписалось paid</span><span style="font-weight:500;color:#D85A30">${d.churned||0}/міс</span></div>
-    <div class="trow"><span>Net приріст paid</span><span style="font-weight:500;color:${(d.new_paid||0)-(d.churned||0)>=0?'#1D9E75':'#D85A30'}">${(d.new_paid||0)-(d.churned||0)>=0?'+':''}${(d.new_paid||0)-(d.churned||0)}/міс</span></div>
-  `;
-  const dx=[];
-  if(ytc<100)dx.push({dot:'dr',text:`YouTube: ${ytc} кліків при ${Math.round((ytv||0)/1000)}K переглядів. 78% глядачів на ТВ/телефоні не бачать опис — тільки голосовий CTA і pinned comments.`});
-  else dx.push({dot:'dg',text:`YouTube: ${ytc} кліків. A/B тест pinned варіантів щоп'ятниці.`});
-  if(!tw||tw<50)dx.push({dot:'dr',text:'Twitter: '+(tw||0)+' кліків. Без людини — не враховувати в прогнозах.'});
-  const churnRate=cr(d);
-  if(churnRate&&churnRate>25)dx.push({dot:'dr',text:`Churn ${churnRate}% — реальна базова цифра. Таргет 15%. Запусти exit survey в Patreon щоб зрозуміти чому йдуть.`});
-  document.getElementById('funnelDiag').innerHTML=dx.map(x=>`<div class="sig"><div class="dot ${x.dot}"></div><span>${x.text}</span></div>`).join('');
+/**
+ * FIX: Build a 180° SBS hemisphere geometry.
+ * - Sphere covers only front 180° (phiStart=PI/2, phiLength=PI)
+ * - UV X remapped to [0, 0.5] so only left eye half of SBS texture is shown
+ * - Flipped inward (normals facing camera inside)
+ */
+function buildHemi180Geometry() {
+  // PhiStart/PhiLength = azimuth (horizontal), ThetaStart/ThetaLength = elevation
+  // Three.js SphereGeometry: phiStart=0 is +X axis, goes around Y
+  // For a front-facing dome we want phi from -PI/2 to +PI/2 (i.e. phiStart=PI/2, phiLength=PI for back hemisphere trick)
+  // Actually we use a full sphere but clamp UV to left half + restrict lon in controls
+  // Best approach: full sphere, remap UV.x to [0, 0.5]
+  const geo = new THREE.SphereGeometry(500, 128, 64);
+  geo.scale(-1, 1, 1); // invert normals
+
+  // Remap UV X: full [0,1] → left half [0, 0.5]
+  const uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    uv.setX(i, uv.getX(i) * 0.5);
+  }
+  uv.needsUpdate = true;
+  return geo;
 }
 
-function renderActions(){
-  const k=lk(),d=months[k]||{},c=cr(d);
-  const acts=[];
-  if(c!=null&&c>25)acts.push({u:'urgent',t:'Churn '+c+'% — найважливіша проблема',s:'Реальна базова цифра: 28-35%/міс. Таргет 15%. Причини невідомі — потрібен exit survey. Patreon → Surveys → запустити опитування для тих хто відписався.'});
-  if((d.paid||0)<480)acts.push({u:'urgent',t:'Paid нижче 480',s:'Okoa для free members. YouTube CTA голосом. Перевірити declined payment emails.'});
-  if((d.yt_clicks||0)<50)acts.push({u:'urgent',t:'YouTube → Patreon: '+(d.yt_clicks||0)+' кліків',s:'CTA голосом на 1 хв і в кінці відео. UTM аналіз у п\'ятницю.'});
-  if((d.t_prince||0)<10)acts.push({u:'urgent',t:'Prince кити: '+(d.t_prince||0)+' — менше 10',s:'Хто пішов? Знаєш причину? Персональне повідомлення кожному хто ще є. Утримати Prince = пріоритет #1 серед китів.'});
-  if((d.gross_shop||0)<500)acts.push({u:'medium',t:'Shop $'+(d.gross_shop||0)+' — нижче $500',s:'Shop CTA в кожному Patreon пості. Okoa при відписці пропонує Bundle. Внеси деталізацію що продалось.'});
-  if((d.tw_clicks||0)<50)acts.push({u:'medium',t:'Twitter: '+(d.tw_clicks||0)+' кліків — ще не дає трафіку',s:'Ігор веде активно. Канал розігрівається. Ціль: 500 кліків/міс через 2 місяці. Відстежуй динаміку.'});
-  if(!(d.reddit_clicks||0))acts.push({u:'medium',t:'Reddit — трафік не відстежується',s:'r/oculusnsfw: 278K підписників. Активна участь в спільноті + тизери з patreon.vrkings.tv. Внести кліки в дані коли запустимо.'});
-  if(!d.newmodel){const lm=allKeys().slice().reverse().find(k=>months[k]?.newmodel);const ma=lm?allKeys().indexOf(lk())-allKeys().indexOf(lm):99;if(ma>=3)acts.push({u:'medium',t:'Нова модель — '+(ma>=99?'невідомо коли':'понад '+ma+' міс тому'),s:'Листопад 2025: нова модель → +88 paid. Мінімум 1/квартал. Анонс нової моделі = повноцінна маркетинг-кампанія.'});}
-  if(!acts.length)acts.push({u:'',t:'Всі показники в нормі',s:'Фокус: exit survey для розуміння churn + Bundle CTA.'});
-  document.getElementById('autoActions').innerHTML=acts.map((a,i)=>`<div class="ai ${a.u}"><div class="an">${i+1}</div><div class="ab"><div class="at">${a.t}</div><div class="as">${a.s}</div></div></div>`).join('');
+function onCanPlay() {
+  const ld = document.getElementById('loading');
+  ld.classList.add('fade');
+  setTimeout(() => ld.classList.remove('on', 'fade'), 700);
+  document.getElementById('canvas').classList.add('active');
+  document.getElementById('topbar').classList.add('show');
+  document.getElementById('hud').classList.add('show');
+  playerActive = true;
+  showHint();
+  video.play().catch(() => setPPIcon(false));
 }
 
-async function addHypo(){
-  const h={id:Date.now(),title:document.getElementById('h_title').value||'Без назви',what:document.getElementById('h_what').value,expect:document.getElementById('h_expect').value,metric:document.getElementById('h_metric').value,deadline:document.getElementById('h_deadline').value,status:document.getElementById('h_status').value,result:document.getElementById('h_result').value,created:new Date().toLocaleDateString('uk-UA')};
-  hypos.unshift(h);await saveHyposRemote();
-  ['h_title','h_what','h_expect','h_metric','h_deadline','h_result'].forEach(id=>document.getElementById(id).value='');
-  renderHypos();
-}
-async function delHypo(id){hypos=hypos.filter(h=>h.id!==id);await saveHyposRemote();renderHypos();}
-async function uHS(id,v){const h=hypos.find(x=>x.id===id);if(h){h.status=v;await saveHyposRemote();}}
-async function uHR(id,v){const h=hypos.find(x=>x.id===id);if(h){h.result=v;await saveHyposRemote();}}
-
-function renderHypos(){
-  const el=document.getElementById('hypoList');
-  if(!hypos.length){el.innerHTML='<div style="text-align:center;color:var(--text3);font-size:13px;padding:30px 0">Гіпотез немає. Додай першу вище.</div>';return;}
-  el.innerHTML=hypos.map(h=>`<div class="hypo-item">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <span style="font-size:14px;font-weight:500">${h.title}</span>
-      <div style="display:flex;gap:8px;align-items:center"><span class="tag ${SC[h.status]||'tn'}">${SL[h.status]||h.status}</span><button class="del-btn" onclick="delHypo(${h.id})">×</button></div>
-    </div>
-    <div class="fr2" style="margin-bottom:10px">
-      <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Що тестуємо</div><div style="font-size:13px;line-height:1.5">${h.what||'—'}</div></div>
-      <div><div style="font-size:11px;color:var(--text3);margin-bottom:3px;text-transform:uppercase;letter-spacing:.04em">Очікуємо</div><div style="font-size:13px;line-height:1.5">${h.expect||'—'}</div></div>
-    </div>
-    <div style="display:flex;gap:16px;margin-bottom:10px;font-size:12px;color:var(--text2);flex-wrap:wrap"><span>Метрика: <strong>${h.metric||'—'}</strong></span><span>Дедлайн: <strong>${h.deadline||'—'}</strong></span><span>${h.created}</span></div>
-    <div style="margin-bottom:8px"><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Статус</label>
-      <select onchange="uHS(${h.id},this.value)" style="border:1px solid var(--border2);border-radius:var(--radius);padding:6px 10px;font-size:12px;font-family:inherit;background:var(--bg);color:var(--text)">
-        ${Object.entries(SL).map(([v,l])=>`<option value="${v}" ${h.status===v?'selected':''}>${l}</option>`).join('')}
-      </select>
-    </div>
-    <div><label style="font-size:11px;color:var(--text3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Результат</label>
-      <textarea onchange="uHR(${h.id},this.value)" style="border:1px solid var(--border2);border-radius:var(--radius);padding:7px 10px;font-size:13px;font-family:inherit;background:var(--bg);color:var(--text);width:100%;resize:vertical;min-height:50px">${h.result||''}</textarea>
-    </div>
-  </div>`).join('');
+function showHint() {
+  clearTimeout(hintTimer);
+  document.getElementById('draghint').classList.remove('gone');
+  hintTimer = setTimeout(hideHint, 4000);
 }
 
-function showSetup(){document.getElementById('setupScreen').style.display='block';document.getElementById('mainApp').style.display='none';}
-
-async function connectSheet(){
-  const url=document.getElementById('setupUrl').value.trim();
-  if(!url.includes('script.google.com')){alert('Невірний URL');return;}
-  scriptUrl=url;localStorage.setItem('vrkings_url',url);
-  document.getElementById('setupScreen').style.display='none';
-  document.getElementById('mainApp').style.display='block';
-  await loadData();
+function animate() {
+  requestAnimationFrame(animate);
+  if (!playerActive) return;
+  lat = Math.max(-85, Math.min(85, lat));
+  const phi = THREE.MathUtils.degToRad(90 - lat);
+  const theta = THREE.MathUtils.degToRad(lon);
+  camera.lookAt(
+    500 * Math.sin(phi) * Math.cos(theta),
+    500 * Math.cos(phi),
+    500 * Math.sin(phi) * Math.sin(theta)
+  );
+  if (videoTexture && video.readyState >= video.HAVE_CURRENT_DATA) videoTexture.needsUpdate = true;
+  renderer.render(scene, camera);
 }
 
-window.addEventListener('load',()=>{
-  const u=localStorage.getItem('vrkings_url');
-  if(u){scriptUrl=u;document.getElementById('mainApp').style.display='block';loadData();}
-  else{document.getElementById('setupScreen').style.display='block';}
+// Drag — mouse
+window.addEventListener('mousedown', e => {
+  if (!playerActive || e.target.closest('#hud,#topbar')) return;
+  isDragging = true; prevX = e.clientX; prevY = e.clientY; hideHint();
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  lon -= (e.clientX - prevX) * 0.25;
+  lat += (e.clientY - prevY) * 0.25;
+  if (IS_180) lon = Math.max(-90, Math.min(90, lon));
+  prevX = e.clientX; prevY = e.clientY;
+});
+window.addEventListener('mouseup', () => isDragging = false);
+
+// Drag — touch
+window.addEventListener('touchstart', e => {
+  if (!playerActive || e.target.closest('#hud,#topbar')) return;
+  if (e.touches.length === 1) { isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY; hideHint(); }
+}, { passive: true });
+window.addEventListener('touchmove', e => {
+  if (!isDragging || e.touches.length !== 1) return;
+  lon -= (e.touches[0].clientX - prevX) * 0.3;
+  lat += (e.touches[0].clientY - prevY) * 0.3;
+  if (IS_180) lon = Math.max(-90, Math.min(90, lon));
+  prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+}, { passive: true });
+window.addEventListener('touchend', () => isDragging = false);
+
+
+
+function launch() {
+  document.getElementById('splash').classList.add('hide');
+  document.getElementById('loading').classList.add('on');
+  initThree();
+}
+
+function goBack() {
+  if (video) video.pause();
+  // FIX: destroy HLS instance to free memory
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  qualMenuOpen = false;
+  document.getElementById('quality-menu').classList.remove('show');
+  document.getElementById('quality-badge').classList.remove('show');
+  document.getElementById('qual-btn').style.display = 'none';
+  clearTimeout(hintTimer);
+  playerActive = false;
+  document.getElementById('canvas').classList.remove('active');
+  document.getElementById('topbar').classList.remove('show');
+  document.getElementById('hud').classList.remove('show');
+  document.getElementById('draghint').classList.remove('gone');
+  document.getElementById('buffering').classList.remove('show');
+  document.getElementById('splash').classList.remove('hide');
+}
+
+function togglePlay() {
+  if (!video) return;
+  if (video.paused) { video.play(); setPPIcon(true); }
+  else { video.pause(); setPPIcon(false); }
+}
+function setPPIcon(p) {
+  document.getElementById('ppico').innerHTML = p
+    ? '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>'
+    : '<polygon points="5 3 19 12 5 21"/>';
+}
+function updateProgress() {
+  if (!video || !video.duration) return;
+  document.getElementById('pfill').style.width = (video.currentTime / video.duration * 100) + '%';
+  document.getElementById('tcur').textContent = fmt(video.currentTime);
+}
+function seekTo(e) {
+  if (!video || !video.duration) return;
+  const r = document.getElementById('ptrack').getBoundingClientRect();
+  video.currentTime = ((e.clientX - r.left) / r.width) * video.duration;
+}
+function setVol(v) { if (video) { video.volume = v; video.muted = (v == 0); } }
+function toggleMute() {
+  if (!video) return;
+  video.muted = !video.muted;
+  document.getElementById('volico').innerHTML = video.muted
+    ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>'
+    : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
+}
+function toggleFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+function hideHint() { clearTimeout(hintTimer); document.getElementById('draghint').classList.add('gone'); }
+function fmt(s) { if (!s || isNaN(s)) return '0:00'; return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+
+function toggleTips(btn) {
+  btn.classList.toggle('open');
+  document.getElementById('tips-body').classList.toggle('open');
+}
+
+// ── Quality management ───────────────────────────────────────────────────────
+
+function updateNativeQualityBadge() {
+  // For Safari native HLS — read actual decoded video dimensions
+  const w = video.videoWidth;
+  const h = video.videoHeight;
+  if (!w || !h) return;
+  const label = qualityLabel(h);
+  document.getElementById('qval-txt').textContent = label;
+  document.getElementById('quality-badge').classList.add('show');
+}
+
+function updateHlsQualityBadge(hls, levelIdx) {
+  const lvl = hls.levels[levelIdx];
+  if (!lvl) return;
+  const h = lvl.height || 0;
+  const kbps = Math.round((lvl.bitrate || 0) / 1000);
+  const label = qualityLabel(h);
+  document.getElementById('qval-txt').textContent = label;
+  document.getElementById('qual-btn').textContent = label;
+  // Highlight active option in menu
+  document.querySelectorAll('.qopt[data-level]').forEach(el => {
+    el.classList.toggle('active', parseInt(el.dataset.level) === levelIdx);
+  });
+}
+
+function qualityLabel(h) {
+  if (h >= 2160) return '4K';
+  if (h >= 1440) return '2K';
+  if (h >= 1080) return '1080p';
+  if (h >= 720)  return '720p';
+  if (h >= 480)  return '480p';
+  if (h >= 360)  return '360p';
+  return h ? h + 'p' : '—';
+}
+
+function buildQualityMenu(hls) {
+  const menu = document.getElementById('quality-menu');
+  menu.innerHTML = '';
+  // Label
+  const lbl = document.createElement('button');
+  lbl.className = 'qopt auto-label';
+  lbl.textContent = 'Quality';
+  menu.appendChild(lbl);
+  // Auto option
+  const autoBtn = document.createElement('button');
+  autoBtn.className = 'qopt';
+  autoBtn.textContent = 'Auto';
+  autoBtn.dataset.level = '-1';
+  autoBtn.onclick = () => {
+    hls.currentLevel = -1; hls.loadLevel = -1;
+    localStorage.removeItem('vr-quality-lock');
+    document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
+    toggleQualityMenu();
+  };
+  menu.appendChild(autoBtn);
+  // Per-level options (highest first)
+  [...hls.levels].reverse().forEach((lvl, i) => {
+    const realIdx = hls.levels.length - 1 - i;
+    const h = lvl.height || 0;
+    const kbps = Math.round((lvl.bitrate || 0) / 1000);
+    const btn = document.createElement('button');
+    const is4k = h >= 2160;
+    btn.className = 'qopt' + (realIdx === hls.currentLevel ? ' active' : '') + (is4k ? ' warn-4k' : '');
+    btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
+    btn.dataset.level = realIdx;
+    btn.onclick = () => {
+      hls.currentLevel = realIdx;
+      hls.loadLevel   = realIdx;
+      localStorage.setItem('vr-quality-lock', realIdx);
+      updateHlsQualityBadge(hls, realIdx);
+      document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
+      btn.classList.add('locked');
+      toggleQualityMenu();
+    };
+    menu.appendChild(btn);
+  });
+  // Restore saved quality preference
+  const saved = localStorage.getItem('vr-quality-lock');
+  if (saved !== null) {
+    const idx = parseInt(saved);
+    if (idx >= 0 && idx < hls.levels.length) {
+      hls.currentLevel = idx;
+      hls.loadLevel = idx;
+      updateHlsQualityBadge(hls, idx);
+      setTimeout(() => {
+        const savedBtn = menu.querySelector(`.qopt[data-level="${idx}"]`);
+        if (savedBtn) savedBtn.classList.add('locked');
+      }, 50);
+    }
+  }
+}
+
+let qualMenuOpen = false;
+function toggleQualityMenu() {
+  qualMenuOpen = !qualMenuOpen;
+  document.getElementById('quality-menu').classList.toggle('show', qualMenuOpen);
+}
+// Close menu on canvas click
+window.addEventListener('mousedown', e => {
+  if (qualMenuOpen && !e.target.closest('#quality-menu') && !e.target.closest('#qual-btn')) {
+    qualMenuOpen = false;
+    document.getElementById('quality-menu').classList.remove('show');
+  }
 });
 </script>
 </body>
