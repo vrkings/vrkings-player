@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>VR KINGS — Embed 360°</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;width:100%;overflow:hidden;background:#07080b;font-family:-apple-system,BlinkMacSystemFont,sans-serif;}
+#canvas{position:fixed;inset:0;z-index:1;cursor:grab;display:block;touch-action:none;}
+#canvas:active{cursor:grabbing;}
+
+/* Minimal loading state — subtle, no text unless slow */
+#loader{position:fixed;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;background:#07080b;transition:opacity .5s;}
+#loader.gone{opacity:0;pointer-events:none;}
+.ring{width:32px;height:32px;border-radius:50%;border:1.5px solid rgba(156,175,94,.15);border-top-color:#9caf5e;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Drag hint — appears once, fades on first interaction */
+#hint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5;pointer-events:none;opacity:0;transition:opacity .6s;display:flex;flex-direction:column;align-items:center;gap:.5rem;}
+#hint.on{opacity:1;}
+#hint.off{opacity:0!important;}
+.hint-icon{width:44px;height:44px;border-radius:50%;border:1px solid rgba(156,175,94,.4);display:flex;align-items:center;justify-content:center;color:#9caf5e;background:rgba(7,8,11,.4);backdrop-filter:blur(4px);}
+.hint-icon svg{width:20px;height:20px;}
+.hint-label{font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#9caf5e;background:rgba(7,8,11,.6);padding:3px 8px;}
+
+/* Error state */
+#err{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;background:#07080b;color:#9caf5e;font-family:ui-monospace,'SF Mono',Menlo,monospace;font-size:11px;letter-spacing:.1em;text-transform:uppercase;text-align:center;padding:2rem;}
+#err.on{display:flex;}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div id="loader"><div class="ring"></div></div>
+<div id="hint">
+  <div class="hint-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/>
+    </svg>
+  </div>
+  <div class="hint-label">Drag to look around</div>
+</div>
+<div id="err">Video source missing. Add ?v=URL parameter.</div>
+
+<script>
+// ── URL parameters ──────────────────────────────────────────────────────────
+const params = new URLSearchParams(window.location.search);
+const VIDEO_URL = params.get('v');
+const AUTOPLAY = params.get('autoplay') !== '0';  // default: on
+const LOOP     = params.get('loop')     !== '0';  // default: on
+const MUTED    = params.get('muted')    !== '0';  // default: on (required for autoplay)
+const AUTOSPIN = params.get('spin')     === '1';  // default: off — auto-rotate camera slowly
+
+if (!VIDEO_URL) {
+  document.getElementById('err').classList.add('on');
+  document.getElementById('loader').classList.add('gone');
+  throw new Error('No video URL');
+}
+
+// ── Three.js setup ──────────────────────────────────────────────────────────
+let renderer, scene, camera, videoTexture, video, hlsInstance = null;
+let lon = -90, lat = 0;
+let isDragging = false, prevX = 0, prevY = 0;
+let userInteracted = false;
+
+const canvas = document.getElementById('canvas');
+renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+scene = new THREE.Scene();
+camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// Video element
+video = document.createElement('video');
+video.crossOrigin = 'anonymous';
+video.loop = LOOP;
+video.playsInline = true;
+video.muted = MUTED;
+video.setAttribute('webkit-playsinline', '');
+video.addEventListener('canplay', onCanPlay, { once: true });
+video.addEventListener('error', () => document.getElementById('err').classList.add('on'));
+
+// HLS or direct
+if (VIDEO_URL.includes('.m3u8')) {
+  if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Safari native HLS
+    video.src = VIDEO_URL;
+  } else if (Hls.isSupported()) {
+    hlsInstance = new Hls({
+      enableWorker: true,
+      autoStartLoad: true,
+      startLevel: -1,
+      capLevelToPlayerSize: false,
+    });
+    hlsInstance.loadSource(VIDEO_URL);
+    hlsInstance.attachMedia(video);
+    hlsInstance.on(Hls.Events.MANIFEST_PARSED, () => {
+      // Force highest level for best quality on embed
+      hlsInstance.currentLevel = hlsInstance.levels.length - 1;
+    });
+  } else {
+    document.getElementById('err').classList.add('on');
+  }
+} else {
+  video.src = VIDEO_URL;
+  video.load();
+}
+
+// Video texture on inverted sphere (equirectangular 360°)
+videoTexture = new THREE.VideoTexture(video);
+videoTexture.minFilter = THREE.LinearFilter;
+videoTexture.magFilter = THREE.LinearFilter;
+videoTexture.format = THREE.RGBAFormat;
+
+const geo = new THREE.SphereGeometry(500, 128, 64);
+geo.scale(-1, 1, 1);
+scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
+
+// Resize handler
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+function onCanPlay() {
+  // Fade out loader
+  const loader = document.getElementById('loader');
+  loader.classList.add('gone');
+  setTimeout(() => loader.remove(), 600);
+
+  // Show hint briefly
+  const hint = document.getElementById('hint');
+  hint.classList.add('on');
+  setTimeout(() => { if (!userInteracted) hint.classList.remove('on'); }, 3500);
+
+  // Autoplay
+  if (AUTOPLAY) {
+    video.play().catch(err => {
+      // Autoplay blocked — show a subtle play prompt
+      hint.querySelector('.hint-label').textContent = 'Tap to play';
+      hint.classList.add('on');
+      canvas.addEventListener('click', () => video.play(), { once: true });
+    });
+  }
+}
+
+function hideHint() {
+  userInteracted = true;
+  document.getElementById('hint').classList.add('off');
+}
+
+// ── Drag controls ───────────────────────────────────────────────────────────
+canvas.addEventListener('mousedown', e => {
+  isDragging = true; prevX = e.clientX; prevY = e.clientY;
+  hideHint();
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  lon -= (e.clientX - prevX) * 0.25;
+  lat += (e.clientY - prevY) * 0.25;
+  prevX = e.clientX; prevY = e.clientY;
+});
+window.addEventListener('mouseup', () => isDragging = false);
+
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) return;
+  isDragging = true; prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+  hideHint();
+}, { passive: true });
+window.addEventListener('touchmove', e => {
+  if (!isDragging || e.touches.length !== 1) return;
+  lon -= (e.touches[0].clientX - prevX) * 0.3;
+  lat += (e.touches[0].clientY - prevY) * 0.3;
+  prevX = e.touches[0].clientX; prevY = e.touches[0].clientY;
+}, { passive: true });
+window.addEventListener('touchend', () => isDragging = false);
+
+// ── Render loop ─────────────────────────────────────────────────────────────
+function animate() {
+  requestAnimationFrame(animate);
+
+  // Optional slow auto-spin until user interacts (?spin=1)
+  if (AUTOSPIN && !userInteracted) lon += 0.05;
+
+  lat = Math.max(-85, Math.min(85, lat));
+  const phi = THREE.MathUtils.degToRad(90 - lat);
+  const theta = THREE.MathUtils.degToRad(lon);
+  camera.lookAt(
+    500 * Math.sin(phi) * Math.cos(theta),
+    500 * Math.cos(phi),
+    500 * Math.sin(phi) * Math.sin(theta)
+  );
+  if (videoTexture && video.readyState >= video.HAVE_CURRENT_DATA) {
+    videoTexture.needsUpdate = true;
+  }
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>
