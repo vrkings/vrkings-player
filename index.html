@@ -625,12 +625,17 @@ function buildQualityMenu(hls) {
   lbl.textContent = 'Quality';
   menu.appendChild(lbl);
   // Auto option
+  const savedLockForAuto = localStorage.getItem('vr-quality-lock');
   const autoBtn = document.createElement('button');
-  autoBtn.className = 'qopt';
+  autoBtn.className = 'qopt' + (savedLockForAuto === null ? ' active' : '');
   autoBtn.textContent = 'Auto';
   autoBtn.dataset.level = '-1';
   autoBtn.onclick = () => {
-    hls.currentLevel = -1; hls.loadLevel = -1;
+    // FIX: was hls.currentLevel = -1 — that forces an immediate buffer
+    // flush (freezes video while audio keeps playing). loadLevel/nextLevel
+    // return to auto ABR without touching what's already buffered.
+    hls.loadLevel = -1;
+    hls.nextLevel = -1;
     localStorage.removeItem('vr-quality-lock');
     document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
     toggleQualityMenu();
@@ -647,8 +652,12 @@ function buildQualityMenu(hls) {
     btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
     btn.dataset.level = realIdx;
     btn.onclick = () => {
-      hls.currentLevel = realIdx;
-      hls.loadLevel   = realIdx;
+      // FIX: was hls.currentLevel = realIdx — immediate switch flushes the
+      // whole buffer and can desync video from audio, requiring a reload.
+      // loadLevel + nextLevel switch at the next segment boundary instead —
+      // a couple seconds' delay, but no stall.
+      hls.loadLevel = realIdx;
+      hls.nextLevel  = realIdx;
       localStorage.setItem('vr-quality-lock', realIdx);
       updateHlsQualityBadge(hls, realIdx);
       document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
@@ -662,8 +671,8 @@ function buildQualityMenu(hls) {
   if (saved !== null) {
     const idx = parseInt(saved);
     if (idx >= 0 && idx < hls.levels.length) {
-      hls.currentLevel = idx;
       hls.loadLevel = idx;
+      hls.nextLevel = idx;
       updateHlsQualityBadge(hls, idx);
       setTimeout(() => {
         const savedBtn = menu.querySelector(`.qopt[data-level="${idx}"]`);
