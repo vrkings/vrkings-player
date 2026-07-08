@@ -321,6 +321,59 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => { if (event.touches.length < 2) lastPinchDist = null; }, { passive: true });
 
+/**
+ * (Re)builds the hls.js instance at a specific quality level and resumes
+ * playback at `resumeAt` seconds.
+ *
+ * FIX (Safari freeze bug): switching quality via hls.js's live level
+ * APIs (currentLevel / loadLevel / nextLevel) works fine in Chrome, but
+ * in Safari it reliably freezes the video track while audio keeps
+ * playing — Safari's MediaSource is much stricter about swapping init
+ * segments between renditions than Chrome's, and this version of hls.js
+ * doesn't handle that handoff cleanly there. The only combination that's
+ * reliably smooth in both browsers is a full teardown + rebuild of the
+ * Hls instance at the desired starting level — effectively what reloading
+ * the page did to "fix" it for viewers, but done in place without losing
+ * playback position.
+ *
+ * @param {number} startLevel -1 for auto, otherwise a specific level index
+ * @param {number} resumeAt   seconds to seek to once the new instance is ready
+ * @param {boolean} isInitial true only for the very first setup (splash → play)
+ */
+function setupHls(startLevel, resumeAt, isInitial) {
+  const wasPlaying = isInitial ? true : !video.paused;
+
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+
+  hlsInstance = new Hls({
+    enableWorker: true,
+    autoStartLoad: true,
+    maxBufferLength: 60,
+    maxMaxBufferLength: 120,
+    maxBufferSize: 120 * 1000 * 1000,
+    startLevel: startLevel,             // -1 = auto pick, or a specific rung
+    abrEwmaDefaultEstimate: 20000000,   // assume ~20Mbps at start → tries high quality first
+    capLevelToPlayerSize: false,
+  });
+  hlsInstance.loadSource(VIDEO_URL);
+  hlsInstance.attachMedia(video);
+
+  hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+    buildQualityMenu(hlsInstance);
+    document.getElementById('qual-btn').style.display = 'flex';
+    document.getElementById('quality-badge').classList.add('show');
+    if (resumeAt > 0) video.currentTime = resumeAt;
+    if (wasPlaying) video.play().catch(() => {});
+  });
+
+  hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+    updateHlsQualityBadge(hlsInstance, data.level);
+  });
+}
+
 function initThree() {
   const canvas = document.getElementById('canvas');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -353,41 +406,14 @@ function initThree() {
     if (Hls.isSupported()) {
       // ── hls.js — used in EVERY browser where it works (Chrome, Firefox,
       // Edge, Android, and modern Safari too — MSE is supported there).
-      // FIX: hls.js is tried FIRST now, not just as a fallback after the
-      // native-HLS check. Native HLS (Safari's built-in player) gives the
-      // browser zero visibility/control over level switching — no manual
-      // quality button, no ABR tuning, nothing. Using hls.js everywhere it's
-      // supported means every viewer gets the manual quality menu AND
-      // proper adaptive bitrate behavior.
-      hlsInstance = new Hls({
-        enableWorker: true,
-        autoStartLoad: true,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        maxBufferSize: 120 * 1000 * 1000,
-        startLevel: -1,                    // auto pick best starting level
-        abrEwmaDefaultEstimate: 20000000,  // assume ~20Mbps at start → tries high quality first
-        capLevelToPlayerSize: false,
-      });
-      hlsInstance.loadSource(VIDEO_URL);
-      hlsInstance.attachMedia(video);
-
-      // Build quality menu + reveal manual quality button once levels are known.
-      // FIX: no longer force currentLevel to the highest rung here — that
-      // disabled hls.js's adaptive bitrate (ABR) entirely (setting
-      // currentLevel switches hls.js into manual mode). With ABR left on,
-      // hls.js climbs to 4K on its own when bandwidth allows and steps
-      // down smoothly instead of freezing in an infinite 4K retry loop.
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-        buildQualityMenu(hlsInstance);
-        document.getElementById('qual-btn').style.display = 'flex';
-        document.getElementById('quality-badge').classList.add('show');
-      });
-
-      // Update badge when level switches
-      hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-        updateHlsQualityBadge(hlsInstance, data.level);
-      });
+      // Native HLS (Safari's built-in player) gives the browser zero
+      // visibility/control over level switching — no manual quality
+      // button, no ABR tuning. Using hls.js everywhere it's supported
+      // means every viewer gets the manual quality menu AND proper
+      // adaptive bitrate behavior.
+      const savedLockOnLoad = localStorage.getItem('vr-quality-lock');
+      const initialLevel = savedLockOnLoad !== null ? parseInt(savedLockOnLoad) : -1;
+      setupHls(initialLevel, 0, true); // start directly at saved level (or auto), autoplay via onCanPlay
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // ── Native HLS fallback — only reached when hls.js genuinely can't
       // run (very old browsers without MediaSource Extensions support).
@@ -631,14 +657,12 @@ function buildQualityMenu(hls) {
   autoBtn.textContent = 'Auto';
   autoBtn.dataset.level = '-1';
   autoBtn.onclick = () => {
-    // FIX: was hls.currentLevel = -1 — that forces an immediate buffer
-    // flush (freezes video while audio keeps playing). loadLevel/nextLevel
-    // return to auto ABR without touching what's already buffered.
-    hls.loadLevel = -1;
-    hls.nextLevel = -1;
+    // FIX: soft-switch (loadLevel/nextLevel) still froze video-with-audio
+    // running in Safari. Full rebuild via setupHls() is the reliable fix
+    // in both Chrome and Safari.
     localStorage.removeItem('vr-quality-lock');
-    document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
     toggleQualityMenu();
+    setupHls(-1, video.currentTime, false);
   };
   menu.appendChild(autoBtn);
   // Per-level options (highest first)
@@ -652,27 +676,22 @@ function buildQualityMenu(hls) {
     btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
     btn.dataset.level = realIdx;
     btn.onclick = () => {
-      // FIX: was hls.currentLevel = realIdx — immediate switch flushes the
-      // whole buffer and can desync video from audio, requiring a reload.
-      // loadLevel + nextLevel switch at the next segment boundary instead —
-      // a couple seconds' delay, but no stall.
-      hls.loadLevel = realIdx;
-      hls.nextLevel  = realIdx;
+      // FIX: soft-switch (loadLevel/nextLevel) froze the video track while
+      // audio kept playing in Safari (even at low renditions like 720p).
+      // A full rebuild via setupHls() is the reliable fix in both browsers.
       localStorage.setItem('vr-quality-lock', realIdx);
-      updateHlsQualityBadge(hls, realIdx);
-      document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
-      btn.classList.add('locked');
       toggleQualityMenu();
+      setupHls(realIdx, video.currentTime, false);
     };
     menu.appendChild(btn);
   });
-  // Restore saved quality preference
+  // Mark saved quality preference as locked in the UI
+  // (the actual level is already correct — setupHls() was started at it directly,
+  // no soft-switch needed here, which is what caused the Safari freeze)
   const saved = localStorage.getItem('vr-quality-lock');
   if (saved !== null) {
     const idx = parseInt(saved);
     if (idx >= 0 && idx < hls.levels.length) {
-      hls.loadLevel = idx;
-      hls.nextLevel = idx;
       updateHlsQualityBadge(hls, idx);
       setTimeout(() => {
         const savedBtn = menu.querySelector(`.qopt[data-level="${idx}"]`);
