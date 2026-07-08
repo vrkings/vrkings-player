@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
 <title>VR KINGS — For Patrons</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.6.16/hls.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Outfit:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -358,6 +358,19 @@ function setupHls(startLevel, resumeAt, isInitial) {
     abrEwmaDefaultEstimate: 20000000,   // assume ~20Mbps at start → tries high quality first
     capLevelToPlayerSize: false,
   });
+
+  // FIX: startLevel only picks the level for the very FIRST fragment — ABR
+  // keeps running after that and, with abrEwmaDefaultEstimate assuming
+  // 20Mbps, kept quietly raising back toward 4K even after a manual pick.
+  // Setting currentLevel here — on a brand-new instance with nothing
+  // buffered yet — locks that level in (no ABR override) without the
+  // mid-playback buffer flush that caused the Safari freeze (that flush
+  // only happens when currentLevel is changed on an instance that already
+  // has buffered/playing media).
+  if (startLevel !== -1) {
+    hlsInstance.currentLevel = startLevel;
+  }
+
   hlsInstance.loadSource(VIDEO_URL);
   hlsInstance.attachMedia(video);
 
