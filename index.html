@@ -231,7 +231,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
     </div>
 
     <button class="cb" onclick="toggleFS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
-    <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);" id="qual-btn">HD</button>
+    <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);">HD</button>
   </div>
 </div>
 
@@ -285,11 +285,11 @@ if (!VIDEO_URL) {
 
 
 let renderer, scene, camera, videoTexture, video;
+let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
 let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
 let currentFov = 75;
-let hlsInstance = null;   // FIX: moved from initThree() — goBack() needs top-scope access
 const FOV_MIN = 30, FOV_MAX = 100, FOV_STEP = 5;
 
 function changeZoom(dir) {
@@ -349,37 +349,36 @@ function initThree() {
   });
   video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
 
-
   if (VIDEO_URL.includes('.m3u8')) {
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // ── Safari / iOS native HLS ──────────────────────────────────────────
-      // Safari picks quality itself. Best we can do: load, then on manifest
-      // parsed force highest rendition via textTracks hack isn't available,
-      // but we CAN detect what resolution is actually playing and show it.
-      video.src = VIDEO_URL;
-      // Poll actual video dimensions once playing — tells us real quality
-      video.addEventListener('playing', updateNativeQualityBadge);
-      video.addEventListener('resize',  updateNativeQualityBadge);
-    } else if (Hls.isSupported()) {
-      // ── hls.js (Chrome, Firefox, Android) ───────────────────────────────
+    if (Hls.isSupported()) {
+      // ── hls.js — used in EVERY browser where it works (Chrome, Firefox,
+      // Edge, Android, and modern Safari too — MSE is supported there).
+      // FIX: hls.js is tried FIRST now, not just as a fallback after the
+      // native-HLS check. Native HLS (Safari's built-in player) gives the
+      // browser zero visibility/control over level switching — no manual
+      // quality button, no ABR tuning, nothing. Using hls.js everywhere it's
+      // supported means every viewer gets the manual quality menu AND
+      // proper adaptive bitrate behavior.
       hlsInstance = new Hls({
         enableWorker: true,
         autoStartLoad: true,
         maxBufferLength: 60,
         maxMaxBufferLength: 120,
         maxBufferSize: 120 * 1000 * 1000,
-        // FIX: start at highest quality immediately, don't ramp up slowly
-        startLevel: -1,           // -1 = auto pick best for first segment
-        abrEwmaDefaultEstimate: 20000000, // assume 20Mbps initially → picks high quality
+        startLevel: -1,                    // auto pick best starting level
+        abrEwmaDefaultEstimate: 20000000,  // assume ~20Mbps at start → tries high quality first
         capLevelToPlayerSize: false,
       });
       hlsInstance.loadSource(VIDEO_URL);
       hlsInstance.attachMedia(video);
 
-      // Once manifest is loaded, force max level & build quality menu
+      // Build quality menu + reveal manual quality button once levels are known.
+      // FIX: no longer force currentLevel to the highest rung here — that
+      // disabled hls.js's adaptive bitrate (ABR) entirely (setting
+      // currentLevel switches hls.js into manual mode). With ABR left on,
+      // hls.js climbs to 4K on its own when bandwidth allows and steps
+      // down smoothly instead of freezing in an infinite 4K retry loop.
       hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-        // Force highest level right away
-        hlsInstance.currentLevel = hlsInstance.levels.length - 1;
         buildQualityMenu(hlsInstance);
         document.getElementById('qual-btn').style.display = 'flex';
         document.getElementById('quality-badge').classList.add('show');
@@ -389,6 +388,14 @@ function initThree() {
       hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
         updateHlsQualityBadge(hlsInstance, data.level);
       });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // ── Native HLS fallback — only reached when hls.js genuinely can't
+      // run (very old browsers without MediaSource Extensions support).
+      // No manual quality control is possible here; the browser's own
+      // player picks quality with no override available.
+      video.src = VIDEO_URL;
+      video.addEventListener('playing', updateNativeQualityBadge);
+      video.addEventListener('resize',  updateNativeQualityBadge);
     }
   } else {
     video.src = VIDEO_URL;
