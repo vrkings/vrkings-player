@@ -51,7 +51,10 @@ h1{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:300;margi
 var p = new URLSearchParams(window.location.search);
 var videoUrl = p.get('v');
 var title = p.get('title') || 'VR KINGS';
-var is180 = p.get('type') === 'sbs' || p.get('type') === '180';
+var type = (p.get('type') === 'sbs' || p.get('type') === '180') ? 'sbs' : '360';
+
+// ⚠️ ЗАМІНИ на ту саму адресу Worker'а, що і в index.html / admin.html
+var WORKER_ORIGIN = 'https://vrkings-proxy.YOUR-SUBDOMAIN.workers.dev';
 
 if (!videoUrl) {
   // Немає URL — показуємо помилку
@@ -61,29 +64,22 @@ if (!videoUrl) {
 } else if (p.get('html') !== '1') {
   // ── ГОЛОВНА ЛОГІКА ──────────────────────────────────────────────────────
   // Якщо є ?v= і немає ?html=1 — ЗАВЖДИ повертаємо JSON.
-  // DeoVR відкриває цю сторінку і отримує JSON → грає як справжнє VR.
-  // ?html=1 використовується тільки для показу UI (кнопка, інструкція).
-  var deoJson = {
-    "title": title,
-    "is3d": true,
-    "screenType": is180 ? "dome" : "sphere",
-    "stereoMode": is180 ? "sbs" : "mono",
-    "skipIntro": 0,
-    "videoLength": 0,
-    "encodings": [{
-      "name": "h264",
-      "videoSources": [{"resolution": 3840, "url": videoUrl}]
-    }]
-  };
-  // Замінюємо всю сторінку на чистий JSON
-  document.documentElement.innerHTML = JSON.stringify(deoJson);
+  // Замість того, щоб вшивати videoUrl напряму (вічний лінк), питаємо
+  // у Worker'а свіжий тимчасовий підписаний лінк і повертаємо його JSON.
+  fetch(WORKER_ORIGIN + '/deovr?url=' + encodeURIComponent(videoUrl) + '&type=' + type + '&title=' + encodeURIComponent(title))
+    .then(function (r) { return r.text(); })
+    .then(function (text) { document.documentElement.innerHTML = text; })
+    .catch(function () {
+      document.documentElement.innerHTML = JSON.stringify({ error: 'Failed to generate link, try again' });
+    });
 
 } else {
   // ── UI режим (?html=1) — для телефонів/ПК ───────────────────────────────
   if (title !== 'VR KINGS') document.getElementById('vid-title').textContent = title;
 
-  // URL для DeoVR Browser — БЕЗ ?html=1, щоб отримати JSON
-  var deoJsonUrl = window.location.href.replace('&html=1','').replace('?html=1','');
+  // URL для DeoVR Browser — веде на Worker, який видасть свіжий JSON
+  // з обмеженим терміном дії саме в момент відкриття
+  var deoJsonUrl = WORKER_ORIGIN + '/deovr?url=' + encodeURIComponent(videoUrl) + '&type=' + type + '&title=' + encodeURIComponent(title);
   document.getElementById('url-display').textContent = deoJsonUrl;
 
   // Deep link

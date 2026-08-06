@@ -334,6 +334,9 @@ function switchMode(mode){
 
 function hashCode(str){let h=0;for(let i=0;i<str.length;i++)h=Math.imul(31,h)+str.charCodeAt(i)|0;return h;}
 
+// ⚠️ ЗАМІНИ на ту саму адресу Worker'а, що і в index.html / deo.html
+const WORKER_ORIGIN='https://vrkings-proxy.YOUR-SUBDOMAIN.workers.dev';
+
 function buildUrls(videoUrl,title,type){
   const base=getBase();
   if(!base||!videoUrl)return null;
@@ -341,10 +344,14 @@ function buildUrls(videoUrl,title,type){
   const screenType=type==='180'?'dome':'sphere';
   const stereoMode=type==='180'?'sbs':'off';
   const is3d=type==='180';
-  const json={title:title||'VR KINGS Video',id:Math.abs(hashCode(videoUrl)),is3d,screenType,stereoMode,skipIntro:0,encodings:[{name:"hls",videoSources:[{resolution:2700,url:videoUrl}]}]};
+  const deoType=type==='180'?'sbs':'360';
+  // DeoVR лінк веде на Worker — той сам згенерує тимчасовий підписаний лінк
+  // у момент, коли шолом відкриє посилання (а не вшиває вічний лінк зараз)
+  const deovrUrl='deovr://'+WORKER_ORIGIN+'/deovr?url='+encodeURIComponent(videoUrl)+'&type='+deoType+'&title='+encodeURIComponent(title||'VR KINGS Video');
+  // Прев'ю нижче — просто приклад структури; реальний JSON з тимчасовим
+  // лінком генерує Worker динамічно щоразу, коли хтось відкриває DeoVR-лінк
+  const json={title:title||'VR KINGS Video',id:Math.abs(hashCode(videoUrl)),is3d,screenType,stereoMode,skipIntro:0,encodings:[{name:"hls",videoSources:[{resolution:2700,url:"<генерується Worker'ом, діє ~15 хв>"}]}]};
   const jsonStr=JSON.stringify(json,null,2);
-  const jsonB64=btoa(unescape(encodeURIComponent(jsonStr)));
-  const deovrUrl='deovr://data:application/json;base64,'+jsonB64;
   return{browserUrl,deovrUrl,jsonStr};
 }
 
