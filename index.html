@@ -248,7 +248,7 @@ function getVideoURL() {
 }
 
 // ⚠️ ЗАМІНИ на реальну адресу свого Cloudflare Worker після деплою
-const WORKER_ORIGIN = 'https://vrkings-proxy.YOUR-SUBDOMAIN.workers.dev';
+const WORKER_ORIGIN = 'https://vrkings-proxy.vrkings-r.workers.dev';
 
 const RAW_VIDEO_URL = getVideoURL();
 const VIDEO_TYPE = new URLSearchParams(window.location.search).get('type') || '360'; // '180' or '360'
