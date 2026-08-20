@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
 <title>VR KINGS — For Patrons</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.10/hls.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.6.13/hls.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300&family=Outfit:wght@300;400;500&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -231,11 +231,15 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
     </div>
 
     <button class="cb" onclick="toggleFS()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></button>
-    <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);" id="qual-btn">HD</button>
+    <button class="cb" id="qual-btn" onclick="toggleQualityMenu()" title="Quality" style="display:none;font-size:.6rem;font-weight:600;letter-spacing:-.01em;font-family:'Outfit',sans-serif;color:var(--gold);">HD</button>
   </div>
 </div>
 
 <script>
+// Same worker as admin.html and deo.html — signs short-lived proxy links so
+// the real Bunny Stream URL is never exposed directly to the viewer.
+const WORKER_ORIGIN = 'https://vrkings-proxy.vrkings-r.workers.dev';
+
 function getVideoURL() {
   const params = new URLSearchParams(window.location.search);
   let url = params.get('v');
@@ -247,25 +251,25 @@ function getVideoURL() {
   return url;
 }
 
-// ⚠️ ЗАМІНИ на реальну адресу свого Cloudflare Worker після деплою
-const WORKER_ORIGIN = 'https://vrkings-proxy.vrkings-r.workers.dev';
-
-const RAW_VIDEO_URL = getVideoURL();
+const VIDEO_URL = getVideoURL();
 const VIDEO_TYPE = new URLSearchParams(window.location.search).get('type') || '360'; // '180' or '360'
 const IS_180 = VIDEO_TYPE === '180';
 
-let PROXY_VIDEO_URL = null;  // тимчасовий підписаний лінк — видає Worker
-let sessionTTL = 900;        // термін дії перепустки (секунди), прийде з Worker'а
-let renewTimer = null;
-
-if (!RAW_VIDEO_URL) {
+if (!VIDEO_URL) {
   document.getElementById('nourl').classList.add('show');
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 } else {
-  // DeoVR deep link веде прямо на Worker — той сам згенерує свіжий
-  // JSON з тимчасовим проксі-лінком у момент, коли шолом відкриє посилання.
-  const deoParams = '?url=' + encodeURIComponent(RAW_VIDEO_URL)
+  // DeoVR — два сценарії:
+  // 1. Окуляри відкривають плеєр у браузері → кнопка "Open in DeoVR" → deep link deovr://
+  // 2. DeoVR app → Browser → відкриває deo.json URL напряму → отримує чистий JSON
+  //
+  // FIX: was pointing at the old/retired 'deovr-api.vrkings-r.workers.dev'
+  // with a '?v=' param — the current worker.js (also used by admin.html and
+  // deo.html) lives at 'vrkings-proxy.vrkings-r.workers.dev' and expects
+  // '?url='. Aligned here so every DeoVR entry point (splash button,
+  // admin-generated links, deo.html) hits the same worker the same way.
+  const deoParams = '?url=' + encodeURIComponent(VIDEO_URL)
     + '&type=' + (IS_180 ? 'sbs' : '360')
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
 
@@ -281,53 +285,10 @@ if (!RAW_VIDEO_URL) {
   };
 }
 
-// Питає у Worker'а свіжий тимчасовий лінк на відео
-async function fetchSession() {
-  const resp = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(RAW_VIDEO_URL));
-  if (!resp.ok) throw new Error('Session request failed: ' + resp.status);
-  const data = await resp.json();
-  sessionTTL = data.ttl || 900;
-  return data.proxyUrl;
-}
-
-// Поки людина реально дивиться — тихо оновлюємо перепустку заздалегідь,
-// щоб довгі відео ніколи не обривались через закінчення терміну дії
-function startAutoRenew() {
-  clearInterval(renewTimer);
-  const renewEveryMs = Math.max(60, Math.floor(sessionTTL * 0.6)) * 1000;
-  renewTimer = setInterval(renewSession, renewEveryMs);
-}
-
-async function renewSession() {
-  try {
-    const freshUrl = await fetchSession();
-    const savedTime = video ? video.currentTime : 0;
-    PROXY_VIDEO_URL = freshUrl;
-    if (hlsInstance) {
-      hlsInstance.loadSource(freshUrl);
-      hlsInstance.once(Hls.Events.MANIFEST_PARSED, function () {
-        video.currentTime = savedTime;
-        video.play().catch(() => {});
-      });
-    } else if (video) {
-      video.src = freshUrl;
-      video.load();
-      const onMeta = function () {
-        video.currentTime = savedTime;
-        video.play().catch(() => {});
-        video.removeEventListener('loadedmetadata', onMeta);
-      };
-      video.addEventListener('loadedmetadata', onMeta);
-    }
-  } catch (e) {
-    console.warn('Session renew failed', e);
-  }
-}
-
 
 
 let renderer, scene, camera, videoTexture, video;
-let hlsInstance = null; // FIX: тепер у верхній області видимості, а не всередині initThree()
+let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
 let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
@@ -363,6 +324,145 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => { if (event.touches.length < 2) lastPinchDist = null; }, { passive: true });
 
+// The URL hls.js actually loads. Starts equal to VIDEO_URL but gets swapped
+// for a short-lived Worker-signed proxy link once resolveStreamUrl() runs —
+// see below. Kept separate from VIDEO_URL so VIDEO_URL always stays the
+// original reference we ask the Worker about (for re-requesting sessions).
+let ACTIVE_STREAM_URL = VIDEO_URL;
+let sessionRefreshTimer = null;
+
+/**
+ * Asks the Worker for a short-lived signed proxy link to VIDEO_URL instead
+ * of playing the real Bunny Stream URL directly — keeps the real CDN link
+ * out of the browser's network requests. If the Worker is unreachable
+ * (down, misconfigured, CORS issue), falls back to the direct URL so
+ * playback still works rather than breaking entirely.
+ *
+ * @returns {Promise<{proxyUrl:string, expires:number, ttl:number}|null>}
+ */
+async function resolveStreamUrl(rawUrl) {
+  try {
+    const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl), { cache: 'no-store' });
+    if (!res.ok) throw new Error('session http ' + res.status);
+    return await res.json();
+  } catch (e) {
+    console.warn('VR KINGS: proxy session unavailable, falling back to direct URL —', e);
+    return null;
+  }
+}
+
+/**
+ * The Worker's proxy link expires (~15 min by default). While someone is
+ * actively watching, quietly fetch a fresh session shortly before it
+ * expires and rebuild the Hls instance at the same quality + playback
+ * position — the viewer never notices, and long videos don't cut out.
+ */
+function scheduleSessionRefresh(ttlSeconds) {
+  clearTimeout(sessionRefreshTimer);
+  const refreshInMs = Math.max((ttlSeconds || 900) - 60, 30) * 1000; // refresh ~60s before expiry
+  sessionRefreshTimer = setTimeout(async () => {
+    if (!playerActive) return; // viewer left the player, no need to refresh
+    const session = await resolveStreamUrl(VIDEO_URL);
+    ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+    const savedLock = localStorage.getItem('vr-quality-lock');
+    const level = savedLock !== null ? parseInt(savedLock) : -1;
+    setupHls(level, video.currentTime, false);
+    if (session) scheduleSessionRefresh(session.ttl);
+  }, refreshInMs);
+}
+
+/**
+ * (Re)builds the hls.js instance at a specific quality level and resumes
+ * playback at `resumeAt` seconds.
+ *
+ * FIX (Safari freeze bug): switching quality via hls.js's live level
+ * APIs (currentLevel / loadLevel / nextLevel) works fine in Chrome, but
+ * in Safari it reliably freezes the video track while audio keeps
+ * playing — Safari's MediaSource is much stricter about swapping init
+ * segments between renditions than Chrome's, and this version of hls.js
+ * doesn't handle that handoff cleanly there. The only combination that's
+ * reliably smooth in both browsers is a full teardown + rebuild of the
+ * Hls instance at the desired starting level — effectively what reloading
+ * the page did to "fix" it for viewers, but done in place without losing
+ * playback position.
+ *
+ * @param {number} startLevel -1 for auto, otherwise a specific level index
+ * @param {number} resumeAt   seconds to seek to once the new instance is ready
+ * @param {boolean} isInitial true only for the very first setup (splash → play)
+ */
+function setupHls(startLevel, resumeAt, isInitial) {
+  const wasPlaying = isInitial ? true : !video.paused;
+
+  if (hlsInstance) {
+    hlsInstance.destroy();
+    hlsInstance = null;
+  }
+
+  hlsInstance = new Hls({
+    enableWorker: false,                // FIX: disable — Safari has known worker/blob quirks with hls.js
+    autoStartLoad: true,
+    maxBufferLength: 60,
+    maxMaxBufferLength: 120,
+    maxBufferSize: 120 * 1000 * 1000,
+    startLevel: startLevel,             // -1 = auto pick, or a specific rung (hint only, see below)
+    abrEwmaDefaultEstimate: 20000000,   // assume ~20Mbps at start → tries high quality first
+    capLevelToPlayerSize: false,
+  });
+
+  // Loads the Worker-proxied link (ACTIVE_STREAM_URL) rather than the raw
+  // Bunny URL — the real CDN link never appears in this request.
+  hlsInstance.loadSource(ACTIVE_STREAM_URL);
+  hlsInstance.attachMedia(video);
+
+  hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+    // FIX: locking the manual level has to happen HERE, not right after
+    // `new Hls()`. Before the manifest is parsed, hls.js doesn't have a
+    // `levels` list yet, so setting currentLevel earlier was silently
+    // ignored and ABR kept climbing back to 4K on its own. Now that levels
+    // exist and nothing has been buffered/played yet, locking here is both
+    // effective AND safe (no mid-playback flush, so no Safari freeze).
+    if (startLevel !== -1) {
+      hlsInstance.currentLevel = startLevel;
+    }
+    buildQualityMenu(hlsInstance);
+    document.getElementById('qual-btn').style.display = 'flex';
+    document.getElementById('quality-badge').classList.add('show');
+    if (resumeAt > 0) video.currentTime = resumeAt;
+    if (wasPlaying) video.play().catch(() => {});
+  });
+
+  hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+    updateHlsQualityBadge(hlsInstance, data.level);
+  });
+
+  // FIX: without this, a fatal error (network hiccup, media decode error,
+  // or anything else) just leaves the player stuck on the loading spinner
+  // forever with no way to recover — exactly what was happening in Safari.
+  hlsInstance.on(Hls.Events.ERROR, (_, data) => {
+    if (!data.fatal) return;
+    console.warn('hls.js fatal error:', data.type, data.details);
+    switch (data.type) {
+      case Hls.ErrorTypes.NETWORK_ERROR:
+        hlsInstance.startLoad();
+        break;
+      case Hls.ErrorTypes.MEDIA_ERROR:
+        hlsInstance.recoverMediaError();
+        break;
+      default:
+        // Unrecoverable — tear down hls.js and fall back to the browser's
+        // own HLS/video handling so the viewer gets SOMETHING instead of
+        // an infinite spinner. Still uses the proxied URL, not the raw one.
+        hlsInstance.destroy();
+        hlsInstance = null;
+        video.src = ACTIVE_STREAM_URL;
+        video.load();
+        video.play().catch(() => {});
+        break;
+    }
+  });
+}
+
+
 function initThree() {
   const canvas = document.getElementById('canvas');
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -391,50 +491,42 @@ function initThree() {
   });
   video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
 
-  hlsInstance = null;
-
-  if (PROXY_VIDEO_URL.includes('.m3u8')) {
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // ── Safari / iOS native HLS ──────────────────────────────────────────
-      // Safari picks quality itself. Best we can do: load, then on manifest
-      // parsed force highest rendition via textTracks hack isn't available,
-      // but we CAN detect what resolution is actually playing and show it.
-      video.src = PROXY_VIDEO_URL;
-      // Poll actual video dimensions once playing — tells us real quality
+  if (VIDEO_URL.includes('.m3u8')) {
+    if (Hls.isSupported()) {
+      // ── hls.js — used in EVERY browser where it works (Chrome, Firefox,
+      // Edge, Android, and modern Safari too — MSE is supported there).
+      // Native HLS (Safari's built-in player) gives the browser zero
+      // visibility/control over level switching — no manual quality
+      // button, no ABR tuning. Using hls.js everywhere it's supported
+      // means every viewer gets the manual quality menu AND proper
+      // adaptive bitrate behavior.
+      const savedLockOnLoad = localStorage.getItem('vr-quality-lock');
+      const initialLevel = savedLockOnLoad !== null ? parseInt(savedLockOnLoad) : -1;
+      // Ask the Worker for a proxied link before hls.js ever touches the
+      // real Bunny URL. If the Worker doesn't answer, resolveStreamUrl()
+      // returns null and we fall back to VIDEO_URL so playback still works.
+      resolveStreamUrl(VIDEO_URL).then(session => {
+        ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+        setupHls(initialLevel, 0, true); // start directly at saved level (or auto), autoplay via onCanPlay
+        if (session) scheduleSessionRefresh(session.ttl);
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // ── Native HLS fallback — only reached when hls.js genuinely can't
+      // run (very old browsers without MediaSource Extensions support).
+      // No manual quality control is possible here; the browser's own
+      // player picks quality with no override available.
+      resolveStreamUrl(VIDEO_URL).then(session => {
+        ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+        video.src = ACTIVE_STREAM_URL;
+        if (session) scheduleSessionRefresh(session.ttl);
+      });
       video.addEventListener('playing', updateNativeQualityBadge);
       video.addEventListener('resize',  updateNativeQualityBadge);
-    } else if (Hls.isSupported()) {
-      // ── hls.js (Chrome, Firefox, Android) ───────────────────────────────
-      hlsInstance = new Hls({
-        enableWorker: true,
-        autoStartLoad: true,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        maxBufferSize: 120 * 1000 * 1000,
-        // FIX: start at highest quality immediately, don't ramp up slowly
-        startLevel: -1,           // -1 = auto pick best for first segment
-        abrEwmaDefaultEstimate: 20000000, // assume 20Mbps initially → picks high quality
-        capLevelToPlayerSize: false,
-      });
-      hlsInstance.loadSource(PROXY_VIDEO_URL);
-      hlsInstance.attachMedia(video);
-
-      // Once manifest is loaded, force max level & build quality menu
-      hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-        // Force highest level right away
-        hlsInstance.currentLevel = hlsInstance.levels.length - 1;
-        buildQualityMenu(hlsInstance);
-        document.getElementById('qual-btn').style.display = 'flex';
-        document.getElementById('quality-badge').classList.add('show');
-      });
-
-      // Update badge when level switches
-      hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-        updateHlsQualityBadge(hlsInstance, data.level);
-      });
     }
   } else {
-    video.src = PROXY_VIDEO_URL;
+    // Non-HLS sources (e.g. Dropbox direct links) aren't part of the
+    // Worker's proxy scheme — play as before.
+    video.src = VIDEO_URL;
     video.load();
     video.addEventListener('playing', updateNativeQualityBadge);
     video.addEventListener('resize',  updateNativeQualityBadge);
@@ -552,27 +644,17 @@ window.addEventListener('touchend', () => isDragging = false);
 
 
 
-async function launch() {
+function launch() {
   document.getElementById('splash').classList.add('hide');
   document.getElementById('loading').classList.add('on');
-  try {
-    PROXY_VIDEO_URL = await fetchSession();
-  } catch (e) {
-    console.error(e);
-    alert('Не вдалося отримати доступ до відео. Перевір інтернет-з\'єднання і спробуй ще раз.');
-    document.getElementById('loading').classList.remove('on');
-    document.getElementById('splash').classList.remove('hide');
-    return;
-  }
   initThree();
-  startAutoRenew();
 }
 
 function goBack() {
-  clearInterval(renewTimer);
   if (video) video.pause();
   // FIX: destroy HLS instance to free memory
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  clearTimeout(sessionRefreshTimer);
   qualMenuOpen = false;
   document.getElementById('quality-menu').classList.remove('show');
   document.getElementById('quality-badge').classList.remove('show');
@@ -672,15 +754,18 @@ function buildQualityMenu(hls) {
   lbl.textContent = 'Quality';
   menu.appendChild(lbl);
   // Auto option
+  const savedLockForAuto = localStorage.getItem('vr-quality-lock');
   const autoBtn = document.createElement('button');
-  autoBtn.className = 'qopt';
+  autoBtn.className = 'qopt' + (savedLockForAuto === null ? ' active' : '');
   autoBtn.textContent = 'Auto';
   autoBtn.dataset.level = '-1';
   autoBtn.onclick = () => {
-    hls.currentLevel = -1; hls.loadLevel = -1;
+    // FIX: soft-switch (loadLevel/nextLevel) still froze video-with-audio
+    // running in Safari. Full rebuild via setupHls() is the reliable fix
+    // in both Chrome and Safari.
     localStorage.removeItem('vr-quality-lock');
-    document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
     toggleQualityMenu();
+    setupHls(-1, video.currentTime, false);
   };
   menu.appendChild(autoBtn);
   // Per-level options (highest first)
@@ -694,23 +779,22 @@ function buildQualityMenu(hls) {
     btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
     btn.dataset.level = realIdx;
     btn.onclick = () => {
-      hls.currentLevel = realIdx;
-      hls.loadLevel   = realIdx;
+      // FIX: soft-switch (loadLevel/nextLevel) froze the video track while
+      // audio kept playing in Safari (even at low renditions like 720p).
+      // A full rebuild via setupHls() is the reliable fix in both browsers.
       localStorage.setItem('vr-quality-lock', realIdx);
-      updateHlsQualityBadge(hls, realIdx);
-      document.querySelectorAll('.qopt[data-level]').forEach(el => el.classList.remove('locked'));
-      btn.classList.add('locked');
       toggleQualityMenu();
+      setupHls(realIdx, video.currentTime, false);
     };
     menu.appendChild(btn);
   });
-  // Restore saved quality preference
+  // Mark saved quality preference as locked in the UI
+  // (the actual level is already correct — setupHls() was started at it directly,
+  // no soft-switch needed here, which is what caused the Safari freeze)
   const saved = localStorage.getItem('vr-quality-lock');
   if (saved !== null) {
     const idx = parseInt(saved);
     if (idx >= 0 && idx < hls.levels.length) {
-      hls.currentLevel = idx;
-      hls.loadLevel = idx;
       updateHlsQualityBadge(hls, idx);
       setTimeout(() => {
         const savedBtn = menu.querySelector(`.qopt[data-level="${idx}"]`);
