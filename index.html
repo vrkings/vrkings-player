@@ -420,31 +420,35 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => { if (event.touches.length < 2) lastPinchDist = null; }, { passive: true });
 
-// The URL hls.js actually loads. Starts equal to VIDEO_URL but gets swapped
-// for a short-lived Worker-signed proxy link once resolveStreamUrl() runs —
-// see below. Kept separate from VIDEO_URL so VIDEO_URL always stays the
-// original reference we ask the Worker about (for re-requesting sessions).
-let ACTIVE_STREAM_URL = VIDEO_URL;
+// The URL hls.js actually loads — always a short-lived Worker-signed proxy
+// link from resolveStreamUrl(). Starts null: there is no usable value before
+// the first session resolves (see resolveStreamUrl() below for why there's
+// no direct-URL fallback anymore).
+let ACTIVE_STREAM_URL = null;
 let sessionRefreshTimer = null;
 
 /**
- * Asks the Worker for a short-lived signed proxy link to VIDEO_URL instead
- * of playing the real Bunny Stream URL directly — keeps the real CDN link
- * out of the browser's network requests. If the Worker is unreachable
- * (down, misconfigured, CORS issue), falls back to the direct URL so
- * playback still works rather than breaking entirely.
+ * Asks the Worker for a short-lived signed proxy link to VIDEO_URL. This is
+ * the ONLY way to play the video, not a nice-to-have: Bunny Stream's hotlink
+ * protection ("Block direct url file access", Referer allowlist) rejects
+ * direct requests outright — confirmed via curl, 403 on missing, empty, or
+ * disallowed Referer, 200 only for vrkings.github.io/*.github.io/the Worker
+ * itself. A caught-and-swallowed failure here used to fall back to the raw
+ * Bunny URL "so playback still works" — it never actually could, Bunny
+ * always 403s it, and on top of that plenty of real viewers (privacy modes,
+ * some in-app browsers) don't send a Referer at all. That fallback was dead
+ * code that just delayed the real failure. If the Worker is unreachable,
+ * there is no way to play the video — callers must treat a thrown error
+ * here as fatal and show the viewer something (see showPlayerError()); the
+ * load-timeout watchdog also catches this if a caller forgets to.
  *
- * @returns {Promise<{proxyUrl:string, expires:number, ttl:number}|null>}
+ * @returns {Promise<{proxyUrl:string, expires:number, ttl:number}>}
+ * @throws if the Worker request fails or returns a non-OK status
  */
 async function resolveStreamUrl(rawUrl) {
-  try {
-    const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl), { cache: 'no-store' });
-    if (!res.ok) throw new Error('session http ' + res.status);
-    return await res.json();
-  } catch (e) {
-    console.warn('VR KINGS: proxy session unavailable, falling back to direct URL —', e);
-    return null;
-  }
+  const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl), { cache: 'no-store' });
+  if (!res.ok) throw new Error('session http ' + res.status);
+  return await res.json();
 }
 
 /**
@@ -458,12 +462,23 @@ function scheduleSessionRefresh(ttlSeconds) {
   const refreshInMs = Math.max((ttlSeconds || 900) - 60, 30) * 1000; // refresh ~60s before expiry
   sessionRefreshTimer = setTimeout(async () => {
     if (!playerActive) return; // viewer left the player, no need to refresh
-    const session = await resolveStreamUrl(VIDEO_URL);
-    ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
-    const savedLock = localStorage.getItem('vr-quality-lock');
-    const level = savedLock !== null ? parseInt(savedLock) : -1;
-    setupHls(level, video.currentTime, false);
-    if (session) scheduleSessionRefresh(session.ttl);
+    try {
+      const session = await resolveStreamUrl(VIDEO_URL);
+      ACTIVE_STREAM_URL = session.proxyUrl;
+      const savedLock = localStorage.getItem('vr-quality-lock');
+      const level = savedLock !== null ? parseInt(savedLock) : -1;
+      setupHls(level, video.currentTime, false);
+      scheduleSessionRefresh(session.ttl);
+    } catch (err) {
+      // The old proxy link may still have a bit of validity left (this
+      // runs ~60s before actual expiry) — retry soon rather than killing
+      // an otherwise-working session over one missed refresh. If the
+      // Worker stays down until the link truly expires, hls.js's own
+      // fatal-error handling (and the load-timeout watchdog, on the next
+      // fresh load) takes over from there.
+      console.warn('Session refresh failed, retrying shortly:', err);
+      scheduleSessionRefresh(30);
+    }
   }, refreshInMs);
 }
 
@@ -616,12 +631,15 @@ function initThree() {
       const savedLockOnLoad = localStorage.getItem('vr-quality-lock');
       const initialLevel = savedLockOnLoad !== null ? parseInt(savedLockOnLoad) : -1;
       // Ask the Worker for a proxied link before hls.js ever touches the
-      // real Bunny URL. If the Worker doesn't answer, resolveStreamUrl()
-      // returns null and we fall back to VIDEO_URL so playback still works.
+      // real Bunny URL — there is no working fallback if this fails (Bunny
+      // 403s any direct/unsigned request), so a failure here is fatal.
       resolveStreamUrl(VIDEO_URL).then(session => {
-        ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+        ACTIVE_STREAM_URL = session.proxyUrl;
         setupHls(initialLevel, 0, true); // start directly at saved level (or auto), autoplay via onCanPlay
-        if (session) scheduleSessionRefresh(session.ttl);
+        scheduleSessionRefresh(session.ttl);
+      }).catch(err => {
+        console.error('Failed to get a playable stream link:', err);
+        showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // ── Native HLS fallback — only reached when hls.js genuinely can't
@@ -629,9 +647,12 @@ function initThree() {
       // No manual quality control is possible here; the browser's own
       // player picks quality with no override available.
       resolveStreamUrl(VIDEO_URL).then(session => {
-        ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+        ACTIVE_STREAM_URL = session.proxyUrl;
         video.src = ACTIVE_STREAM_URL;
-        if (session) scheduleSessionRefresh(session.ttl);
+        scheduleSessionRefresh(session.ttl);
+      }).catch(err => {
+        console.error('Failed to get a playable stream link:', err);
+        showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
       });
       video.addEventListener('playing', updateNativeQualityBadge);
       video.addEventListener('resize',  updateNativeQualityBadge);
