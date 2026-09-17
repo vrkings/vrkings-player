@@ -296,7 +296,15 @@ if (!VIDEO_URL) {
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
 
   const deoJsonUrl = WORKER_ORIGIN + '/deovr' + deoParams;
-  const deepLink = 'deovr://' + deoJsonUrl;
+  // FIX: was 'deovr://' + deoJsonUrl (double slash). Assigning that to
+  // .href / location.href runs it through the browser's WHATWG URL parser,
+  // which treats the double slash as "parse an authority next" and tries
+  // to interpret the embedded https://... as a host — silently corrupting
+  // it (confirmed: the colon after "https" gets dropped, producing
+  // "https//..."). Safari then correctly refuses it as an invalid address.
+  // A single colon (no //) makes deovr: a non-special scheme with an
+  // OPAQUE path, so the entire embedded URL survives byte-for-byte.
+  const deepLink = 'deovr:' + deoJsonUrl;
 
   const deoLinkEl = document.getElementById('deovr-link');
   deoLinkEl.href = deepLink;
@@ -335,22 +343,50 @@ function tryOpenDeepLink(deepLink, fallbackElId) {
 let renderer, scene, camera, videoTexture, video;
 let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
 let loadTimeoutTimer = null;
+let stallTimer = null;
+const STALL_TIMEOUT_MS = 20000;
 let playerErrorShown = false;
 
 /**
  * Shows a visible, user-facing error instead of leaving the viewer staring
  * at an infinite spinner or a silent black screen. Cancels the load-timeout
- * watchdog (whichever failure reports first "wins" — no duplicate messages)
- * and stops trying to render further.
+ * and mid-playback stall watchdogs (whichever failure reports first "wins"
+ * — no duplicate messages) and stops trying to render further.
  */
 function showPlayerError(message) {
   if (playerErrorShown) return;
   playerErrorShown = true;
   clearTimeout(loadTimeoutTimer);
+  clearTimeout(stallTimer);
   document.getElementById('contextStatus').classList.remove('show');
   document.getElementById('loading').classList.remove('on', 'fade');
   document.getElementById('playerErrorMsg').textContent = message;
   document.getElementById('playerError').classList.add('show');
+}
+
+/**
+ * FIX: the load-timeout watchdog only covers the INITIAL load — once
+ * onCanPlay() fires it's cleared for good and nothing else was watching
+ * afterward. If the network drops mid-playback, hls.js's own fatal
+ * NETWORK_ERROR handling just calls startLoad() again and again forever
+ * with no visible sign anything is wrong and no retry cap — the viewer
+ * just sees the buffering spinner spin indefinitely. This watchdog re-arms
+ * on every real playback progress tick (see updateProgress()) and fires if
+ * ~20s pass with no progress at all, whatever the cause (stalled buffering,
+ * a stuck NETWORK_ERROR retry loop, anything else) — same visible
+ * error+retry UI as the initial-load case.
+ */
+function armStallWatchdog() {
+  clearTimeout(stallTimer);
+  stallTimer = setTimeout(() => {
+    console.warn('Playback stalled for', STALL_TIMEOUT_MS / 1000, 's with no progress');
+    showPlayerError('Відтворення зупинилось. Перевірте з’єднання і спробуйте ще раз.');
+  }, STALL_TIMEOUT_MS);
+}
+
+function disarmStallWatchdog() {
+  clearTimeout(stallTimer);
+  stallTimer = null;
 }
 
 // FIX: webglcontextlost — common on weak/older mobile GPUs, especially with
@@ -370,6 +406,7 @@ function showPlayerError(message) {
     if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
     if (video) video.pause();
     clearTimeout(sessionRefreshTimer);
+    disarmStallWatchdog(); // FIX: no timeupdate will fire while we're recovering — don't let the stall watchdog fire mid-recovery
     document.getElementById('contextStatus').classList.add('show');
   }, false);
 
@@ -717,6 +754,7 @@ function buildHemi180Geometry() {
 
 function onCanPlay() {
   clearTimeout(loadTimeoutTimer); // FIX: playback started, the load-timeout watchdog can stand down
+  armStallWatchdog(); // FIX: hand off to the mid-playback stall watchdog from here on
   const ld = document.getElementById('loading');
   ld.classList.add('fade');
   setTimeout(() => ld.classList.remove('on', 'fade'), 700);
@@ -797,6 +835,7 @@ function launch() {
 
 function goBack() {
   clearTimeout(loadTimeoutTimer);
+  disarmStallWatchdog();
   if (video) video.pause();
   // FIX: destroy HLS instance to free memory
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
@@ -826,6 +865,7 @@ function setPPIcon(p) {
     : '<polygon points="5 3 19 12 5 21"/>';
 }
 function updateProgress() {
+  armStallWatchdog(); // FIX: 'timeupdate' firing at all means real progress — reset the stall clock
   if (!video || !video.duration) return;
   document.getElementById('pfill').style.width = (video.currentTime / video.duration * 100) + '%';
   document.getElementById('tcur').textContent = fmt(video.currentTime);
