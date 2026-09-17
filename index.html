@@ -47,6 +47,18 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 #nourl h2{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold);margin-bottom:1rem;}
 #nourl p{color:var(--muted);font-size:.9rem;line-height:1.8;max-width:400px;}
 #nourl code{display:block;margin-top:1rem;background:rgba(212,168,67,.08);border:1px solid var(--border);padding:.8rem 1.2rem;border-radius:.5rem;font-size:.8rem;color:var(--gold2);word-break:break-all;}
+/* Player error overlay — WebGL init failure, video error, load timeout, or
+   unrecoverable webglcontextlost. Shown instead of leaving the viewer
+   staring at an infinite spinner or a silent black screen. */
+#playerError{position:fixed;inset:0;z-index:400;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);text-align:center;padding:2rem;}
+#playerError.show{display:flex;}
+#playerError h2{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold);margin-bottom:1rem;}
+#playerError p{color:var(--muted);font-size:.9rem;line-height:1.8;max-width:400px;margin:0 auto 1.5rem;}
+#playerError button{background:transparent;border:1px solid var(--gold);color:var(--gold);font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;padding:.75rem 2.2rem;border-radius:99px;cursor:pointer;transition:background .2s,color .2s;}
+#playerError button:hover{background:var(--gold);color:var(--bg);}
+/* Transient status shown while attempting to recover from a lost WebGL context */
+#contextStatus{position:fixed;top:1.2rem;left:50%;transform:translateX(-50%);z-index:401;display:none;background:rgba(7,8,11,.9);border:1px solid var(--border);color:var(--gold2);font-size:.75rem;letter-spacing:.05em;padding:.6rem 1.2rem;border-radius:99px;}
+#contextStatus.show{display:block;}
 #loading{position:fixed;inset:0;z-index:150;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;}
 #loading.on{display:flex;}
 #loading.fade{animation:fadeOut .6s forwards;}
@@ -134,6 +146,12 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
 <body>
 <canvas id="canvas"></canvas>
 <div id="nourl"><h2>No video link</h2><p>Add a video link to the URL like this:</p><code id="example-url"></code></div>
+<div id="playerError">
+  <h2>Щось пішло не так</h2>
+  <p id="playerErrorMsg">Не вдалось завантажити відео.</p>
+  <button onclick="location.reload()">Спробувати ще раз</button>
+</div>
+<div id="contextStatus">Відновлення з'єднання з відеокартою…</div>
 <div id="splash">
   <div class="glow"></div>
   <div class="splash-inner">
@@ -155,6 +173,10 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
       <div class="btn-with-desc">
         <a class="btn-deovr" id="deovr-link" href="#" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>Open in DeoVR</a>
         <div class="btn-desc">🥽 VR headset — best quality, full immersion</div>
+        <div class="deovr-fallback" id="deovr-fallback" style="display:none;font-size:.72rem;color:var(--gold2);line-height:1.6;">
+          Не відкрилось? Встанови застосунок
+          <a href="https://deovr.com/app" target="_blank" rel="noopener" style="color:var(--gold2);text-decoration:underline;">DeoVR</a>.
+        </div>
       </div>
 
       <!-- Browser tips -->
@@ -281,14 +303,88 @@ if (!VIDEO_URL) {
   deoLinkEl.target = '_self';
   deoLinkEl.onclick = function(e) {
     e.preventDefault();
-    window.location.href = deepLink;
+    tryOpenDeepLink(deepLink, 'deovr-fallback');
   };
+}
+
+/**
+ * FIX: clicking "Open in DeoVR" silently did nothing if the DeoVR app
+ * wasn't installed or the OS/browser blocked the custom `deovr://` scheme —
+ * no error, no hint what to do. Standard trick: if the page hasn't lost
+ * focus/visibility shortly after attempting the deep link, the app almost
+ * certainly didn't open, so show a fallback message with an install link.
+ */
+function tryOpenDeepLink(deepLink, fallbackElId) {
+  let leftPage = false;
+  function markLeft() { leftPage = true; }
+  document.addEventListener('visibilitychange', markLeft, { once: true });
+  window.addEventListener('blur', markLeft, { once: true });
+  window.location.href = deepLink;
+  setTimeout(() => {
+    document.removeEventListener('visibilitychange', markLeft);
+    window.removeEventListener('blur', markLeft);
+    if (!leftPage) {
+      const el = document.getElementById(fallbackElId);
+      if (el) el.style.display = 'block';
+    }
+  }, 2500);
 }
 
 
 
 let renderer, scene, camera, videoTexture, video;
 let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
+let loadTimeoutTimer = null;
+let playerErrorShown = false;
+
+/**
+ * Shows a visible, user-facing error instead of leaving the viewer staring
+ * at an infinite spinner or a silent black screen. Cancels the load-timeout
+ * watchdog (whichever failure reports first "wins" — no duplicate messages)
+ * and stops trying to render further.
+ */
+function showPlayerError(message) {
+  if (playerErrorShown) return;
+  playerErrorShown = true;
+  clearTimeout(loadTimeoutTimer);
+  document.getElementById('contextStatus').classList.remove('show');
+  document.getElementById('loading').classList.remove('on', 'fade');
+  document.getElementById('playerErrorMsg').textContent = message;
+  document.getElementById('playerError').classList.add('show');
+}
+
+// FIX: webglcontextlost — common on weak/older mobile GPUs, especially with
+// a 4K video texture being re-uploaded every frame. Previously there was no
+// handler at all, so a lost context just meant a silent black/frozen screen
+// with no recovery. Per the WebGL spec, calling preventDefault() here is
+// what tells the browser to attempt restoration; if it succeeds,
+// 'webglcontextrestored' fires and we rebuild the whole Three.js scene via
+// initThree(). If it doesn't fire (unrecoverable), the viewer just sees the
+// "restoring…" status forever, which is still strictly better than a silent
+// black screen — but it's a known gap, see PR notes.
+(function () {
+  const playerCanvas = document.getElementById('canvas');
+  playerCanvas.addEventListener('webglcontextlost', function (e) {
+    e.preventDefault();
+    console.warn('WebGL context lost — attempting recovery');
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    if (video) video.pause();
+    clearTimeout(sessionRefreshTimer);
+    document.getElementById('contextStatus').classList.add('show');
+  }, false);
+
+  playerCanvas.addEventListener('webglcontextrestored', function () {
+    console.warn('WebGL context restored — reinitializing player');
+    document.getElementById('contextStatus').classList.remove('show');
+    try {
+      initThree();
+    } catch (err) {
+      console.error('Reinit after context restore failed:', err);
+      showPlayerError('Не вдалось відновити відеоплеєр після втрати з’єднання з відеокартою.');
+    }
+  }, false);
+})();
+
 let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
@@ -465,7 +561,18 @@ function setupHls(startLevel, resumeAt, isInitial) {
 
 function initThree() {
   const canvas = document.getElementById('canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+
+  // FIX: WebGL context creation can fail outright (blocked GPU, hardware
+  // acceleration disabled, too many contexts already open) — previously
+  // this threw an uncaught exception and the viewer was left on the
+  // "Loading…" spinner forever with zero indication anything was wrong.
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  } catch (err) {
+    console.error('WebGL renderer creation failed:', err);
+    showPlayerError('Не вдалось запустити відеоплеєр на цьому пристрої.');
+    return;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene = new THREE.Scene();
@@ -480,6 +587,12 @@ function initThree() {
   video.addEventListener('loadedmetadata', () => { document.getElementById('tdur').textContent = fmt(video.duration); });
   video.addEventListener('timeupdate', updateProgress);
   video.addEventListener('canplay', onCanPlay, { once: true });
+  // FIX: a network or decode error on the <video> element was never
+  // surfaced anywhere — the viewer just saw the loading spinner hang.
+  video.addEventListener('error', () => {
+    console.error('video element error:', video.error);
+    showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
+  });
   video.addEventListener('waiting', () => document.getElementById('buffering').classList.add('show'));
   video.addEventListener('playing', () => {
     document.getElementById('buffering').classList.remove('show');
@@ -582,6 +695,7 @@ function buildHemi180Geometry() {
 }
 
 function onCanPlay() {
+  clearTimeout(loadTimeoutTimer); // FIX: playback started, the load-timeout watchdog can stand down
   const ld = document.getElementById('loading');
   ld.classList.add('fade');
   setTimeout(() => ld.classList.remove('on', 'fade'), 700);
@@ -645,12 +759,23 @@ window.addEventListener('touchend', () => isDragging = false);
 
 
 function launch() {
+  playerErrorShown = false;
   document.getElementById('splash').classList.add('hide');
   document.getElementById('loading').classList.add('on');
+  // FIX: if nothing calls onCanPlay() within a reasonable time (WebGL
+  // stalled, HLS never resolves, Worker/CDN unreachable, etc.) the viewer
+  // was left staring at the spinner forever with no explanation. 18s covers
+  // slow mobile networks without making people wait too long for a real
+  // failure to surface.
+  clearTimeout(loadTimeoutTimer);
+  loadTimeoutTimer = setTimeout(() => {
+    if (!playerActive) showPlayerError('Не вдалось завантажити відео за розумний час.');
+  }, 18000);
   initThree();
 }
 
 function goBack() {
+  clearTimeout(loadTimeoutTimer);
   if (video) video.pause();
   // FIX: destroy HLS instance to free memory
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
