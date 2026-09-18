@@ -729,21 +729,40 @@ function initThree() {
 }
 
 /**
- * FIX: Build a 180° SBS hemisphere geometry.
- * - Sphere covers only front 180° (phiStart=PI/2, phiLength=PI)
- * - UV X remapped to [0, 0.5] so only left eye half of SBS texture is shown
+ * Build a 180° SBS hemisphere geometry.
+ *
+ * FIX: this used to build a FULL 360° sphere (`new THREE.SphereGeometry(500,
+ * 128, 64)`, no phi args — despite this exact docstring already claiming
+ * "phiStart=PI/2, phiLength=PI" above it; that plan was written but never
+ * actually implemented, per the old inline comment admitting "Actually we
+ * use a full sphere"). A full sphere means Three.js generates its own UV.x
+ * across [0,1] over a 360° sweep — but the SBS left-eye image only contains
+ * 180°-calibrated content, so every degree of real content was stretched
+ * across 2 degrees of sphere. That 2x azimuthal stretch is exactly the
+ * "розтягнуто" (stretched) distortion reported for ?type=180 while ?type=360
+ * looked fine (it wasn't correct either — it just happened to look
+ * plausible staring straight ahead, since that's a small enough patch of
+ * UV space for the global mis-projection to be less obvious there).
+ *
+ * phiStart=3*PI/2 is not arbitrary — verified numerically against the
+ * camera's own lookAt() formula (lon=-90/0/+90 -> world directions
+ * -Z/+X/+Z, the full mouse-drag clamp range for 180 mode). With
+ * phiStart=3*PI/2, phiLength=PI, geometry-u=0/0.5/1 land on EXACTLY
+ * -Z/+X/+Z too: the left edge of the video lines up with the default view
+ * (lon=-90), the center with lon=0, and the right edge with the lon=+90
+ * clamp limit — the whole allowed drag range is covered edge-to-edge, in
+ * the correct orientation, with nothing stretched and nothing missing.
+ *
+ * - Sphere covers only the front 180° (phiStart=3*PI/2, phiLength=PI)
+ * - UV X remapped to [0, 0.5] so only the left eye half of the SBS texture is shown
  * - Flipped inward (normals facing camera inside)
  */
 function buildHemi180Geometry() {
-  // PhiStart/PhiLength = azimuth (horizontal), ThetaStart/ThetaLength = elevation
-  // Three.js SphereGeometry: phiStart=0 is +X axis, goes around Y
-  // For a front-facing dome we want phi from -PI/2 to +PI/2 (i.e. phiStart=PI/2, phiLength=PI for back hemisphere trick)
-  // Actually we use a full sphere but clamp UV to left half + restrict lon in controls
-  // Best approach: full sphere, remap UV.x to [0, 0.5]
-  const geo = new THREE.SphereGeometry(500, 128, 64);
+  const geo = new THREE.SphereGeometry(500, 128, 64, 3 * Math.PI / 2, Math.PI);
   geo.scale(-1, 1, 1); // invert normals
 
-  // Remap UV X: full [0,1] → left half [0, 0.5]
+  // Remap UV X: full [0,1] (now correctly spanning just the 180° arc) →
+  // left half [0, 0.5] of the SBS texture (left eye only)
   const uv = geo.attributes.uv;
   for (let i = 0; i < uv.count; i++) {
     uv.setX(i, uv.getX(i) * 0.5);
