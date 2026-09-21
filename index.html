@@ -36,12 +36,6 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 .btn-watch:hover{color:var(--bg);}
 .btn-watch svg,.btn-watch span{position:relative;z-index:1;}
 .btn-watch svg{width:17px;height:17px;}
-.btn-divider{font-size:.65rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
-.btn-deovr{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid rgba(212,168,67,.3);color:var(--muted);font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;padding:.7rem 2.2rem;border-radius:99px;cursor:pointer;transition:border-color .2s,color .2s;text-decoration:none;}
-.btn-deovr:hover{border-color:var(--gold);color:var(--gold);}
-.btn-deovr.copied{border-color:var(--gold);color:var(--bg);background:var(--gold);}
-.btn-deovr.link-error{border-color:#c0392b;color:#c0392b;}
-.btn-deovr svg{width:15px;height:15px;}
 .btn-with-desc{display:flex;flex-direction:column;align-items:center;gap:.5rem;width:100%;}
 .btn-desc{font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
 #nourl{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);text-align:center;padding:2rem;}
@@ -171,22 +165,6 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
         <button class="btn-watch" onclick="launch()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg><span>Watch in Browser</span></button>
         <div class="btn-desc">💻 Computer &amp; phone — no app needed</div>
       </div>
-      <div class="btn-divider">or</div>
-      <div class="btn-with-desc">
-        <a class="btn-deovr" id="deovr-link" href="#" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>Open in DeoVR</a>
-        <div class="btn-desc">🥽 VR headset — best quality, full immersion</div>
-        <div class="deovr-fallback" id="deovr-fallback" style="display:none;font-size:.72rem;color:var(--gold2);line-height:1.6;">
-          Не відкрилось? Встанови застосунок
-          <a href="https://deovr.com/app" target="_blank" rel="noopener" style="color:var(--gold2);text-decoration:underline;">DeoVR</a>.
-        </div>
-      </div>
-
-      <div class="btn-divider">or</div>
-      <div class="btn-with-desc">
-        <button class="btn-deovr" id="copylink-btn" onclick="copyVrPlayerLink(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span id="copylink-label">Copy link for VR player</span></button>
-        <div class="btn-desc">📋 Встав цей лінк у свій VR-плеєр (DeoVR, HereSphere, SKYBOX) через Add URL/Open URL</div>
-      </div>
-
       <!-- Browser tips -->
       <div class="browser-tips">
         <button class="tips-toggle" onclick="toggleTips(this)">
@@ -217,15 +195,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
                 <div class="tip-browser tip-best">Safari</div>
               </div>
             </div>
-            <div class="tip-row">
-              <div class="tip-ico">🥽</div>
-              <div class="tip-info">
-                <div class="tip-device">VR Headset</div>
-                <div class="tip-browser tip-best">→ DeoVR</div>
-              </div>
-            </div>
           </div>
-          <div class="tips-note">🥽 On Quest/Pico: open this link in headset browser,<br/>then tap <b>Open in DeoVR</b> for best VR experience</div>
         </div>
       </div>
     </div>
@@ -289,109 +259,7 @@ if (!VIDEO_URL) {
   document.getElementById('nourl').classList.add('show');
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
-} else {
-  // DeoVR — два сценарії:
-  // 1. Окуляри відкривають плеєр у браузері → кнопка "Open in DeoVR" → deep link deovr://
-  // 2. DeoVR app → Browser → відкриває deo.json URL напряму → отримує чистий JSON
-  //
-  // FIX: was pointing at the old/retired 'deovr-api.vrkings-r.workers.dev'
-  // with a '?v=' param — the current worker.js (also used by admin.html and
-  // deo.html) lives at 'vrkings-proxy.vrkings-r.workers.dev' and expects
-  // '?url='. Aligned here so every DeoVR entry point (splash button,
-  // admin-generated links, deo.html) hits the same worker the same way.
-  const deoParams = '?url=' + encodeURIComponent(VIDEO_URL)
-    + '&type=' + (IS_180 ? 'sbs' : '360')
-    + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
-
-  const deoJsonUrl = WORKER_ORIGIN + '/deovr' + deoParams;
-  // deovr.com/app/doc documents "deovr://" + <raw https URL> with NO
-  // example of a nested URL that itself has a query string. Our deoJsonUrl
-  // does (?url=...&type=...&title=...), and live-tail on the Worker
-  // (zero requests ever arrive, though DeoVR opens and spins forever)
-  // showed the failure happens before any HTTP call — i.e. inside DeoVR/
-  // Quest's own parsing of the incoming deep link, not in our JSON.
-  // Confirmed by direct reproduction: running our exact literal deep-link
-  // string through a generic RFC 3986 URI parser (same authority-parsing
-  // rule Android's Uri class uses when the OS dispatches a "deovr://"
-  // intent) turns "https://vrkings-proxy..." right after "deovr://" into
-  // a corrupted authority — "https:" gets cut off as the host, dropping
-  // the colon, because our un-encoded "?"/"&"/":" sit exactly where a
-  // URI authority component is expected to end. Percent-encoding the
-  // whole nested Worker URL as one opaque blob removes every character a
-  // generic URI parser could misread as an authority/path/query boundary.
-  // NOTE: this goes beyond what deovr.com/app/doc actually documents —
-  // it's the best RFC-3986-grounded hypothesis for OUR case (query string
-  // in the nested URL), not a confirmed fact from DeoVR's own docs.
-  const deepLink = 'deovr://' + encodeURIComponent(deoJsonUrl);
-
-  const deoLinkEl = document.getElementById('deovr-link');
-  deoLinkEl.href = deepLink;
-  deoLinkEl.target = '_self';
-  deoLinkEl.onclick = function(e) {
-    e.preventDefault();
-    tryOpenDeepLink(deepLink, 'deovr-fallback');
-  };
 }
-
-/**
- * "Copy link for VR player" — for viewers who already have DeoVR,
- * HereSphere, SKYBOX etc. installed and prefer pasting a URL via that
- * app's own "Add URL"/"Open URL" feature instead of relying on the
- * deovr:// deep link (which, per live-tail testing, DeoVR's Quest app
- * never even turns into a network request in our case).
- *
- * Uses a MUCH longer-lived proxy session (?long=1 → 7200s server-side,
- * see worker.js) than our own player's default 900s: our player has
- * scheduleSessionRefresh() to quietly renew the token before it expires,
- * but a third-party player pasted a static URL has no such refresh —
- * the link must outlive the entire watch session (load + full video +
- * any pauses) on its own.
- */
-async function copyVrPlayerLink(btn) {
-  const label = document.getElementById('copylink-label');
-  const origLabel = label.textContent;
-  btn.classList.remove('link-error');
-  label.textContent = 'Generating…';
-  try {
-    const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(VIDEO_URL) + '&long=1', { cache: 'no-store' });
-    if (!res.ok) throw new Error('session http ' + res.status);
-    const session = await res.json();
-    await navigator.clipboard.writeText(session.proxyUrl);
-    btn.classList.add('copied');
-    label.textContent = 'Copied!';
-    setTimeout(() => { btn.classList.remove('copied'); label.textContent = origLabel; }, 2500);
-  } catch (err) {
-    console.warn('copyVrPlayerLink failed:', err);
-    btn.classList.add('link-error');
-    label.textContent = 'Failed — try again';
-    setTimeout(() => { btn.classList.remove('link-error'); label.textContent = origLabel; }, 2500);
-  }
-}
-
-/**
- * FIX: clicking "Open in DeoVR" silently did nothing if the DeoVR app
- * wasn't installed or the OS/browser blocked the custom `deovr://` scheme —
- * no error, no hint what to do. Standard trick: if the page hasn't lost
- * focus/visibility shortly after attempting the deep link, the app almost
- * certainly didn't open, so show a fallback message with an install link.
- */
-function tryOpenDeepLink(deepLink, fallbackElId) {
-  let leftPage = false;
-  function markLeft() { leftPage = true; }
-  document.addEventListener('visibilitychange', markLeft, { once: true });
-  window.addEventListener('blur', markLeft, { once: true });
-  window.location.href = deepLink;
-  setTimeout(() => {
-    document.removeEventListener('visibilitychange', markLeft);
-    window.removeEventListener('blur', markLeft);
-    if (!leftPage) {
-      const el = document.getElementById(fallbackElId);
-      if (el) el.style.display = 'block';
-    }
-  }, 2500);
-}
-
-
 
 let renderer, scene, camera, videoTexture, video;
 let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
