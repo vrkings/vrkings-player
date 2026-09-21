@@ -347,12 +347,15 @@ function buildUrls(videoUrl,title,type){
   const deoType=type==='180'?'sbs':'360';
   // DeoVR лінк веде на Worker — той сам згенерує тимчасовий підписаний лінк
   // у момент, коли шолом відкриє посилання (а не вшиває вічний лінк зараз)
-  // FIX: 'deovr:' (одна двокрапка), НЕ 'deovr://' — подвійний слеш примушує
-  // будь-який WHATWG URL-парсер (браузер, .href) трактувати вкладений
-  // https://... як authority і пошкоджувати його (двокрапка після "https"
-  // зникає). Однокрапковий варіант — opaque path, вкладений URL лишається
-  // побайтово цілим. Той самий фікс, що й у index.html.
-  const deovrUrl='deovr:'+WORKER_ORIGIN+'/deovr?url='+encodeURIComponent(videoUrl)+'&type='+deoType+'&title='+encodeURIComponent(title||'VR KINGS Video');
+  // REVERTED: 'deovr://' (подвійний слеш) — офіційний формат з deovr.com/app/doc
+  // ("deovr://https://www.deovr.com/something.json"), підтверджено forum.deovr.com.
+  // Раніше тут стояло 'deovr:' (одна двокрапка), бо WHATWG URL-парсер /
+  // NSURL справді пошкоджує вкладений https://... при читанні через .href
+  // (двокрапка після "https" зникає) — це технічно вірно для стандартного
+  // парсингу, але сам застосунок DeoVR не читає deep link через такий
+  // об'єкт URL, а хоче саме документований подвійний слеш. Той самий
+  // фікс/відкат, що й у index.html.
+  const deovrUrl='deovr://'+WORKER_ORIGIN+'/deovr?url='+encodeURIComponent(videoUrl)+'&type='+deoType+'&title='+encodeURIComponent(title||'VR KINGS Video');
   // Прев'ю нижче — просто приклад структури; реальний JSON з тимчасовим
   // лінком генерує Worker динамічно щоразу, коли хтось відкриває DeoVR-лінк
   const json={title:title||'VR KINGS Video',id:Math.abs(hashCode(videoUrl)),is3d,screenType,stereoMode,skipIntro:0,encodings:[{name:"hls",videoSources:[{resolution:2700,url:"<генерується Worker'ом, діє ~15 хв>"}]}]};

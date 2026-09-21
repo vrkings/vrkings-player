@@ -296,15 +296,20 @@ if (!VIDEO_URL) {
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
 
   const deoJsonUrl = WORKER_ORIGIN + '/deovr' + deoParams;
-  // FIX: was 'deovr://' + deoJsonUrl (double slash). Assigning that to
-  // .href / location.href runs it through the browser's WHATWG URL parser,
-  // which treats the double slash as "parse an authority next" and tries
-  // to interpret the embedded https://... as a host — silently corrupting
-  // it (confirmed: the colon after "https" gets dropped, producing
-  // "https//..."). Safari then correctly refuses it as an invalid address.
-  // A single colon (no //) makes deovr: a non-special scheme with an
-  // OPAQUE path, so the entire embedded URL survives byte-for-byte.
-  const deepLink = 'deovr:' + deoJsonUrl;
+  // REVERTED (see forum.deovr.com/d/10120 + deovr.com/app/doc, which
+  // literally shows "deovr://https://www.deovr.com/something.json" as the
+  // documented deep-link format): this was briefly changed to 'deovr:'
+  // (single colon) because passing the double-slash form through a
+  // standard URL object's .href getter — confirmed with both Node's WHATWG
+  // URL and real iOS NSURL — silently corrupts it ("https://" becomes
+  // "https//"). That test was correct about generic URL-object parsing,
+  // but DeoVR itself does not go through that round-trip for the deep
+  // link's payload — it wants the literal documented double-slash form.
+  // The single-colon version opened DeoVR but played nothing on a real
+  // Quest. Back to 'deovr://' — the raw `deepLink` string below is what
+  // actually gets handed to location.href in the click handler, not the
+  // (possibly browser-normalized) deoLinkEl.href read back afterward.
+  const deepLink = 'deovr://' + deoJsonUrl;
 
   const deoLinkEl = document.getElementById('deovr-link');
   deoLinkEl.href = deepLink;
