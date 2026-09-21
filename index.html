@@ -39,6 +39,8 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 .btn-divider{font-size:.65rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
 .btn-deovr{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid rgba(212,168,67,.3);color:var(--muted);font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;padding:.7rem 2.2rem;border-radius:99px;cursor:pointer;transition:border-color .2s,color .2s;text-decoration:none;}
 .btn-deovr:hover{border-color:var(--gold);color:var(--gold);}
+.btn-deovr.copied{border-color:var(--gold);color:var(--bg);background:var(--gold);}
+.btn-deovr.link-error{border-color:#c0392b;color:#c0392b;}
 .btn-deovr svg{width:15px;height:15px;}
 .btn-with-desc{display:flex;flex-direction:column;align-items:center;gap:.5rem;width:100%;}
 .btn-desc{font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
@@ -177,6 +179,12 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
           Не відкрилось? Встанови застосунок
           <a href="https://deovr.com/app" target="_blank" rel="noopener" style="color:var(--gold2);text-decoration:underline;">DeoVR</a>.
         </div>
+      </div>
+
+      <div class="btn-divider">or</div>
+      <div class="btn-with-desc">
+        <button class="btn-deovr" id="copylink-btn" onclick="copyVrPlayerLink(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span id="copylink-label">Copy link for VR player</span></button>
+        <div class="btn-desc">📋 Встав цей лінк у свій VR-плеєр (DeoVR, HereSphere, SKYBOX) через Add URL/Open URL</div>
       </div>
 
       <!-- Browser tips -->
@@ -323,6 +331,41 @@ if (!VIDEO_URL) {
     e.preventDefault();
     tryOpenDeepLink(deepLink, 'deovr-fallback');
   };
+}
+
+/**
+ * "Copy link for VR player" — for viewers who already have DeoVR,
+ * HereSphere, SKYBOX etc. installed and prefer pasting a URL via that
+ * app's own "Add URL"/"Open URL" feature instead of relying on the
+ * deovr:// deep link (which, per live-tail testing, DeoVR's Quest app
+ * never even turns into a network request in our case).
+ *
+ * Uses a MUCH longer-lived proxy session (?long=1 → 7200s server-side,
+ * see worker.js) than our own player's default 900s: our player has
+ * scheduleSessionRefresh() to quietly renew the token before it expires,
+ * but a third-party player pasted a static URL has no such refresh —
+ * the link must outlive the entire watch session (load + full video +
+ * any pauses) on its own.
+ */
+async function copyVrPlayerLink(btn) {
+  const label = document.getElementById('copylink-label');
+  const origLabel = label.textContent;
+  btn.classList.remove('link-error');
+  label.textContent = 'Generating…';
+  try {
+    const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(VIDEO_URL) + '&long=1', { cache: 'no-store' });
+    if (!res.ok) throw new Error('session http ' + res.status);
+    const session = await res.json();
+    await navigator.clipboard.writeText(session.proxyUrl);
+    btn.classList.add('copied');
+    label.textContent = 'Copied!';
+    setTimeout(() => { btn.classList.remove('copied'); label.textContent = origLabel; }, 2500);
+  } catch (err) {
+    console.warn('copyVrPlayerLink failed:', err);
+    btn.classList.add('link-error');
+    label.textContent = 'Failed — try again';
+    setTimeout(() => { btn.classList.remove('link-error'); label.textContent = origLabel; }, 2500);
+  }
 }
 
 /**
