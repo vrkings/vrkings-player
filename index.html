@@ -474,7 +474,19 @@ function setupHls(startLevel, resumeAt, isInitial) {
     maxMaxBufferLength: 120,
     maxBufferSize: 120 * 1000 * 1000,
     startLevel: startLevel,             // -1 = auto pick, or a specific rung (hint only, see below)
-    abrEwmaDefaultEstimate: 20000000,   // assume ~20Mbps at start → tries high quality first
+    // TUNE: was 20_000_000 (~20Mbps). Against our real bitrate ladder
+    // (240p≈0.68M … 1440p≈9.8M, 2160p≈42.2M), that estimate × the 0.95
+    // abrBandWidthFactor clears 1440p (9.8M) on literally every fresh
+    // viewer's very first fragment, regardless of their actual connection
+    // — hls.js's abandon-rules-check (_abandonRulesCheck) does correctly
+    // detect and abort+downgrade a too-slow fragment (confirmed fixed for
+    // the first-fragment case since hls.js 1.4.0, we're on 1.6.13), but
+    // that recovery only kicks in after up to maxStarvationDelay (4s) of
+    // stall — a visible stutter for anyone who can't sustain ~10Mbps.
+    // 7_000_000 targets 1080p (6.3M) as the first attempt instead —
+    // still well above hls.js's own conservative 500Kbps default, but
+    // one full rung less of risk for the middle of the audience.
+    abrEwmaDefaultEstimate: 7000000,
     capLevelToPlayerSize: false,
   });
 
