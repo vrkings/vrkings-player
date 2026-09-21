@@ -36,10 +36,6 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 .btn-watch:hover{color:var(--bg);}
 .btn-watch svg,.btn-watch span{position:relative;z-index:1;}
 .btn-watch svg{width:17px;height:17px;}
-.btn-divider{font-size:.65rem;color:var(--muted);letter-spacing:.12em;text-transform:uppercase;}
-.btn-deovr{display:inline-flex;align-items:center;gap:.65rem;background:transparent;border:1px solid rgba(212,168,67,.3);color:var(--muted);font-family:'Outfit',sans-serif;font-size:.82rem;font-weight:400;letter-spacing:.08em;text-transform:uppercase;padding:.7rem 2.2rem;border-radius:99px;cursor:pointer;transition:border-color .2s,color .2s;text-decoration:none;}
-.btn-deovr:hover{border-color:var(--gold);color:var(--gold);}
-.btn-deovr svg{width:15px;height:15px;}
 .btn-with-desc{display:flex;flex-direction:column;align-items:center;gap:.5rem;width:100%;}
 .btn-desc{font-size:.72rem;color:var(--muted);text-align:center;line-height:1.5;}
 #nourl{position:fixed;inset:0;z-index:300;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);text-align:center;padding:2rem;}
@@ -47,6 +43,18 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 #nourl h2{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold);margin-bottom:1rem;}
 #nourl p{color:var(--muted);font-size:.9rem;line-height:1.8;max-width:400px;}
 #nourl code{display:block;margin-top:1rem;background:rgba(212,168,67,.08);border:1px solid var(--border);padding:.8rem 1.2rem;border-radius:.5rem;font-size:.8rem;color:var(--gold2);word-break:break-all;}
+/* Player error overlay — WebGL init failure, video error, load timeout, or
+   unrecoverable webglcontextlost. Shown instead of leaving the viewer
+   staring at an infinite spinner or a silent black screen. */
+#playerError{position:fixed;inset:0;z-index:400;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg);text-align:center;padding:2rem;}
+#playerError.show{display:flex;}
+#playerError h2{font-family:'Cormorant Garamond',serif;font-size:2rem;color:var(--gold);margin-bottom:1rem;}
+#playerError p{color:var(--muted);font-size:.9rem;line-height:1.8;max-width:400px;margin:0 auto 1.5rem;}
+#playerError button{background:transparent;border:1px solid var(--gold);color:var(--gold);font-family:'Outfit',sans-serif;font-size:.85rem;font-weight:500;letter-spacing:.08em;text-transform:uppercase;padding:.75rem 2.2rem;border-radius:99px;cursor:pointer;transition:background .2s,color .2s;}
+#playerError button:hover{background:var(--gold);color:var(--bg);}
+/* Transient status shown while attempting to recover from a lost WebGL context */
+#contextStatus{position:fixed;top:1.2rem;left:50%;transform:translateX(-50%);z-index:401;display:none;background:rgba(7,8,11,.9);border:1px solid var(--border);color:var(--gold2);font-size:.75rem;letter-spacing:.05em;padding:.6rem 1.2rem;border-radius:99px;}
+#contextStatus.show{display:block;}
 #loading{position:fixed;inset:0;z-index:150;background:var(--bg);display:none;flex-direction:column;align-items:center;justify-content:center;gap:1.1rem;}
 #loading.on{display:flex;}
 #loading.fade{animation:fadeOut .6s forwards;}
@@ -134,6 +142,12 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
 <body>
 <canvas id="canvas"></canvas>
 <div id="nourl"><h2>No video link</h2><p>Add a video link to the URL like this:</p><code id="example-url"></code></div>
+<div id="playerError">
+  <h2>Щось пішло не так</h2>
+  <p id="playerErrorMsg">Не вдалось завантажити відео.</p>
+  <button onclick="location.reload()">Спробувати ще раз</button>
+</div>
+<div id="contextStatus">Відновлення з'єднання з відеокартою…</div>
 <div id="splash">
   <div class="glow"></div>
   <div class="splash-inner">
@@ -151,12 +165,6 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
         <button class="btn-watch" onclick="launch()"><svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg><span>Watch in Browser</span></button>
         <div class="btn-desc">💻 Computer &amp; phone — no app needed</div>
       </div>
-      <div class="btn-divider">or</div>
-      <div class="btn-with-desc">
-        <a class="btn-deovr" id="deovr-link" href="#" target="_blank"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg>Open in DeoVR</a>
-        <div class="btn-desc">🥽 VR headset — best quality, full immersion</div>
-      </div>
-
       <!-- Browser tips -->
       <div class="browser-tips">
         <button class="tips-toggle" onclick="toggleTips(this)">
@@ -187,15 +195,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
                 <div class="tip-browser tip-best">Safari</div>
               </div>
             </div>
-            <div class="tip-row">
-              <div class="tip-ico">🥽</div>
-              <div class="tip-info">
-                <div class="tip-device">VR Headset</div>
-                <div class="tip-browser tip-best">→ DeoVR</div>
-              </div>
-            </div>
           </div>
-          <div class="tips-note">🥽 On Quest/Pico: open this link in headset browser,<br/>then tap <b>Open in DeoVR</b> for best VR experience</div>
         </div>
       </div>
     </div>
@@ -259,36 +259,90 @@ if (!VIDEO_URL) {
   document.getElementById('nourl').classList.add('show');
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
-} else {
-  // DeoVR — два сценарії:
-  // 1. Окуляри відкривають плеєр у браузері → кнопка "Open in DeoVR" → deep link deovr://
-  // 2. DeoVR app → Browser → відкриває deo.json URL напряму → отримує чистий JSON
-  //
-  // FIX: was pointing at the old/retired 'deovr-api.vrkings-r.workers.dev'
-  // with a '?v=' param — the current worker.js (also used by admin.html and
-  // deo.html) lives at 'vrkings-proxy.vrkings-r.workers.dev' and expects
-  // '?url='. Aligned here so every DeoVR entry point (splash button,
-  // admin-generated links, deo.html) hits the same worker the same way.
-  const deoParams = '?url=' + encodeURIComponent(VIDEO_URL)
-    + '&type=' + (IS_180 ? 'sbs' : '360')
-    + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
-
-  const deoJsonUrl = WORKER_ORIGIN + '/deovr' + deoParams;
-  const deepLink = 'deovr://' + deoJsonUrl;
-
-  const deoLinkEl = document.getElementById('deovr-link');
-  deoLinkEl.href = deepLink;
-  deoLinkEl.target = '_self';
-  deoLinkEl.onclick = function(e) {
-    e.preventDefault();
-    window.location.href = deepLink;
-  };
 }
-
-
 
 let renderer, scene, camera, videoTexture, video;
 let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
+let loadTimeoutTimer = null;
+let stallTimer = null;
+const STALL_TIMEOUT_MS = 20000;
+let playerErrorShown = false;
+
+/**
+ * Shows a visible, user-facing error instead of leaving the viewer staring
+ * at an infinite spinner or a silent black screen. Cancels the load-timeout
+ * and mid-playback stall watchdogs (whichever failure reports first "wins"
+ * — no duplicate messages) and stops trying to render further.
+ */
+function showPlayerError(message) {
+  if (playerErrorShown) return;
+  playerErrorShown = true;
+  clearTimeout(loadTimeoutTimer);
+  clearTimeout(stallTimer);
+  document.getElementById('contextStatus').classList.remove('show');
+  document.getElementById('loading').classList.remove('on', 'fade');
+  document.getElementById('playerErrorMsg').textContent = message;
+  document.getElementById('playerError').classList.add('show');
+}
+
+/**
+ * FIX: the load-timeout watchdog only covers the INITIAL load — once
+ * onCanPlay() fires it's cleared for good and nothing else was watching
+ * afterward. If the network drops mid-playback, hls.js's own fatal
+ * NETWORK_ERROR handling just calls startLoad() again and again forever
+ * with no visible sign anything is wrong and no retry cap — the viewer
+ * just sees the buffering spinner spin indefinitely. This watchdog re-arms
+ * on every real playback progress tick (see updateProgress()) and fires if
+ * ~20s pass with no progress at all, whatever the cause (stalled buffering,
+ * a stuck NETWORK_ERROR retry loop, anything else) — same visible
+ * error+retry UI as the initial-load case.
+ */
+function armStallWatchdog() {
+  clearTimeout(stallTimer);
+  stallTimer = setTimeout(() => {
+    console.warn('Playback stalled for', STALL_TIMEOUT_MS / 1000, 's with no progress');
+    showPlayerError('Відтворення зупинилось. Перевірте з’єднання і спробуйте ще раз.');
+  }, STALL_TIMEOUT_MS);
+}
+
+function disarmStallWatchdog() {
+  clearTimeout(stallTimer);
+  stallTimer = null;
+}
+
+// FIX: webglcontextlost — common on weak/older mobile GPUs, especially with
+// a 4K video texture being re-uploaded every frame. Previously there was no
+// handler at all, so a lost context just meant a silent black/frozen screen
+// with no recovery. Per the WebGL spec, calling preventDefault() here is
+// what tells the browser to attempt restoration; if it succeeds,
+// 'webglcontextrestored' fires and we rebuild the whole Three.js scene via
+// initThree(). If it doesn't fire (unrecoverable), the viewer just sees the
+// "restoring…" status forever, which is still strictly better than a silent
+// black screen — but it's a known gap, see PR notes.
+(function () {
+  const playerCanvas = document.getElementById('canvas');
+  playerCanvas.addEventListener('webglcontextlost', function (e) {
+    e.preventDefault();
+    console.warn('WebGL context lost — attempting recovery');
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    if (video) video.pause();
+    clearTimeout(sessionRefreshTimer);
+    disarmStallWatchdog(); // FIX: no timeupdate will fire while we're recovering — don't let the stall watchdog fire mid-recovery
+    document.getElementById('contextStatus').classList.add('show');
+  }, false);
+
+  playerCanvas.addEventListener('webglcontextrestored', function () {
+    console.warn('WebGL context restored — reinitializing player');
+    document.getElementById('contextStatus').classList.remove('show');
+    try {
+      initThree();
+    } catch (err) {
+      console.error('Reinit after context restore failed:', err);
+      showPlayerError('Не вдалось відновити відеоплеєр після втрати з’єднання з відеокартою.');
+    }
+  }, false);
+})();
+
 let lon = -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
@@ -324,31 +378,35 @@ window.addEventListener('touchmove', e => {
 }, { passive: true });
 window.addEventListener('touchend', () => { if (event.touches.length < 2) lastPinchDist = null; }, { passive: true });
 
-// The URL hls.js actually loads. Starts equal to VIDEO_URL but gets swapped
-// for a short-lived Worker-signed proxy link once resolveStreamUrl() runs —
-// see below. Kept separate from VIDEO_URL so VIDEO_URL always stays the
-// original reference we ask the Worker about (for re-requesting sessions).
-let ACTIVE_STREAM_URL = VIDEO_URL;
+// The URL hls.js actually loads — always a short-lived Worker-signed proxy
+// link from resolveStreamUrl(). Starts null: there is no usable value before
+// the first session resolves (see resolveStreamUrl() below for why there's
+// no direct-URL fallback anymore).
+let ACTIVE_STREAM_URL = null;
 let sessionRefreshTimer = null;
 
 /**
- * Asks the Worker for a short-lived signed proxy link to VIDEO_URL instead
- * of playing the real Bunny Stream URL directly — keeps the real CDN link
- * out of the browser's network requests. If the Worker is unreachable
- * (down, misconfigured, CORS issue), falls back to the direct URL so
- * playback still works rather than breaking entirely.
+ * Asks the Worker for a short-lived signed proxy link to VIDEO_URL. This is
+ * the ONLY way to play the video, not a nice-to-have: Bunny Stream's hotlink
+ * protection ("Block direct url file access", Referer allowlist) rejects
+ * direct requests outright — confirmed via curl, 403 on missing, empty, or
+ * disallowed Referer, 200 only for vrkings.github.io/*.github.io/the Worker
+ * itself. A caught-and-swallowed failure here used to fall back to the raw
+ * Bunny URL "so playback still works" — it never actually could, Bunny
+ * always 403s it, and on top of that plenty of real viewers (privacy modes,
+ * some in-app browsers) don't send a Referer at all. That fallback was dead
+ * code that just delayed the real failure. If the Worker is unreachable,
+ * there is no way to play the video — callers must treat a thrown error
+ * here as fatal and show the viewer something (see showPlayerError()); the
+ * load-timeout watchdog also catches this if a caller forgets to.
  *
- * @returns {Promise<{proxyUrl:string, expires:number, ttl:number}|null>}
+ * @returns {Promise<{proxyUrl:string, expires:number, ttl:number}>}
+ * @throws if the Worker request fails or returns a non-OK status
  */
 async function resolveStreamUrl(rawUrl) {
-  try {
-    const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl), { cache: 'no-store' });
-    if (!res.ok) throw new Error('session http ' + res.status);
-    return await res.json();
-  } catch (e) {
-    console.warn('VR KINGS: proxy session unavailable, falling back to direct URL —', e);
-    return null;
-  }
+  const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl), { cache: 'no-store' });
+  if (!res.ok) throw new Error('session http ' + res.status);
+  return await res.json();
 }
 
 /**
@@ -362,12 +420,23 @@ function scheduleSessionRefresh(ttlSeconds) {
   const refreshInMs = Math.max((ttlSeconds || 900) - 60, 30) * 1000; // refresh ~60s before expiry
   sessionRefreshTimer = setTimeout(async () => {
     if (!playerActive) return; // viewer left the player, no need to refresh
-    const session = await resolveStreamUrl(VIDEO_URL);
-    ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
-    const savedLock = localStorage.getItem('vr-quality-lock');
-    const level = savedLock !== null ? parseInt(savedLock) : -1;
-    setupHls(level, video.currentTime, false);
-    if (session) scheduleSessionRefresh(session.ttl);
+    try {
+      const session = await resolveStreamUrl(VIDEO_URL);
+      ACTIVE_STREAM_URL = session.proxyUrl;
+      const savedLock = localStorage.getItem('vr-quality-lock');
+      const level = savedLock !== null ? parseInt(savedLock) : -1;
+      setupHls(level, video.currentTime, false);
+      scheduleSessionRefresh(session.ttl);
+    } catch (err) {
+      // The old proxy link may still have a bit of validity left (this
+      // runs ~60s before actual expiry) — retry soon rather than killing
+      // an otherwise-working session over one missed refresh. If the
+      // Worker stays down until the link truly expires, hls.js's own
+      // fatal-error handling (and the load-timeout watchdog, on the next
+      // fresh load) takes over from there.
+      console.warn('Session refresh failed, retrying shortly:', err);
+      scheduleSessionRefresh(30);
+    }
   }, refreshInMs);
 }
 
@@ -465,7 +534,18 @@ function setupHls(startLevel, resumeAt, isInitial) {
 
 function initThree() {
   const canvas = document.getElementById('canvas');
-  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+
+  // FIX: WebGL context creation can fail outright (blocked GPU, hardware
+  // acceleration disabled, too many contexts already open) — previously
+  // this threw an uncaught exception and the viewer was left on the
+  // "Loading…" spinner forever with zero indication anything was wrong.
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  } catch (err) {
+    console.error('WebGL renderer creation failed:', err);
+    showPlayerError('Не вдалось запустити відеоплеєр на цьому пристрої.');
+    return;
+  }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene = new THREE.Scene();
@@ -480,6 +560,12 @@ function initThree() {
   video.addEventListener('loadedmetadata', () => { document.getElementById('tdur').textContent = fmt(video.duration); });
   video.addEventListener('timeupdate', updateProgress);
   video.addEventListener('canplay', onCanPlay, { once: true });
+  // FIX: a network or decode error on the <video> element was never
+  // surfaced anywhere — the viewer just saw the loading spinner hang.
+  video.addEventListener('error', () => {
+    console.error('video element error:', video.error);
+    showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
+  });
   video.addEventListener('waiting', () => document.getElementById('buffering').classList.add('show'));
   video.addEventListener('playing', () => {
     document.getElementById('buffering').classList.remove('show');
@@ -503,12 +589,15 @@ function initThree() {
       const savedLockOnLoad = localStorage.getItem('vr-quality-lock');
       const initialLevel = savedLockOnLoad !== null ? parseInt(savedLockOnLoad) : -1;
       // Ask the Worker for a proxied link before hls.js ever touches the
-      // real Bunny URL. If the Worker doesn't answer, resolveStreamUrl()
-      // returns null and we fall back to VIDEO_URL so playback still works.
+      // real Bunny URL — there is no working fallback if this fails (Bunny
+      // 403s any direct/unsigned request), so a failure here is fatal.
       resolveStreamUrl(VIDEO_URL).then(session => {
-        ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+        ACTIVE_STREAM_URL = session.proxyUrl;
         setupHls(initialLevel, 0, true); // start directly at saved level (or auto), autoplay via onCanPlay
-        if (session) scheduleSessionRefresh(session.ttl);
+        scheduleSessionRefresh(session.ttl);
+      }).catch(err => {
+        console.error('Failed to get a playable stream link:', err);
+        showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
       });
     } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
       // ── Native HLS fallback — only reached when hls.js genuinely can't
@@ -516,9 +605,12 @@ function initThree() {
       // No manual quality control is possible here; the browser's own
       // player picks quality with no override available.
       resolveStreamUrl(VIDEO_URL).then(session => {
-        ACTIVE_STREAM_URL = session ? session.proxyUrl : VIDEO_URL;
+        ACTIVE_STREAM_URL = session.proxyUrl;
         video.src = ACTIVE_STREAM_URL;
-        if (session) scheduleSessionRefresh(session.ttl);
+        scheduleSessionRefresh(session.ttl);
+      }).catch(err => {
+        console.error('Failed to get a playable stream link:', err);
+        showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
       });
       video.addEventListener('playing', updateNativeQualityBadge);
       video.addEventListener('resize',  updateNativeQualityBadge);
@@ -558,21 +650,40 @@ function initThree() {
 }
 
 /**
- * FIX: Build a 180° SBS hemisphere geometry.
- * - Sphere covers only front 180° (phiStart=PI/2, phiLength=PI)
- * - UV X remapped to [0, 0.5] so only left eye half of SBS texture is shown
+ * Build a 180° SBS hemisphere geometry.
+ *
+ * FIX: this used to build a FULL 360° sphere (`new THREE.SphereGeometry(500,
+ * 128, 64)`, no phi args — despite this exact docstring already claiming
+ * "phiStart=PI/2, phiLength=PI" above it; that plan was written but never
+ * actually implemented, per the old inline comment admitting "Actually we
+ * use a full sphere"). A full sphere means Three.js generates its own UV.x
+ * across [0,1] over a 360° sweep — but the SBS left-eye image only contains
+ * 180°-calibrated content, so every degree of real content was stretched
+ * across 2 degrees of sphere. That 2x azimuthal stretch is exactly the
+ * "розтягнуто" (stretched) distortion reported for ?type=180 while ?type=360
+ * looked fine (it wasn't correct either — it just happened to look
+ * plausible staring straight ahead, since that's a small enough patch of
+ * UV space for the global mis-projection to be less obvious there).
+ *
+ * phiStart=3*PI/2 is not arbitrary — verified numerically against the
+ * camera's own lookAt() formula (lon=-90/0/+90 -> world directions
+ * -Z/+X/+Z, the full mouse-drag clamp range for 180 mode). With
+ * phiStart=3*PI/2, phiLength=PI, geometry-u=0/0.5/1 land on EXACTLY
+ * -Z/+X/+Z too: the left edge of the video lines up with the default view
+ * (lon=-90), the center with lon=0, and the right edge with the lon=+90
+ * clamp limit — the whole allowed drag range is covered edge-to-edge, in
+ * the correct orientation, with nothing stretched and nothing missing.
+ *
+ * - Sphere covers only the front 180° (phiStart=3*PI/2, phiLength=PI)
+ * - UV X remapped to [0, 0.5] so only the left eye half of the SBS texture is shown
  * - Flipped inward (normals facing camera inside)
  */
 function buildHemi180Geometry() {
-  // PhiStart/PhiLength = azimuth (horizontal), ThetaStart/ThetaLength = elevation
-  // Three.js SphereGeometry: phiStart=0 is +X axis, goes around Y
-  // For a front-facing dome we want phi from -PI/2 to +PI/2 (i.e. phiStart=PI/2, phiLength=PI for back hemisphere trick)
-  // Actually we use a full sphere but clamp UV to left half + restrict lon in controls
-  // Best approach: full sphere, remap UV.x to [0, 0.5]
-  const geo = new THREE.SphereGeometry(500, 128, 64);
+  const geo = new THREE.SphereGeometry(500, 128, 64, 3 * Math.PI / 2, Math.PI);
   geo.scale(-1, 1, 1); // invert normals
 
-  // Remap UV X: full [0,1] → left half [0, 0.5]
+  // Remap UV X: full [0,1] (now correctly spanning just the 180° arc) →
+  // left half [0, 0.5] of the SBS texture (left eye only)
   const uv = geo.attributes.uv;
   for (let i = 0; i < uv.count; i++) {
     uv.setX(i, uv.getX(i) * 0.5);
@@ -582,6 +693,8 @@ function buildHemi180Geometry() {
 }
 
 function onCanPlay() {
+  clearTimeout(loadTimeoutTimer); // FIX: playback started, the load-timeout watchdog can stand down
+  armStallWatchdog(); // FIX: hand off to the mid-playback stall watchdog from here on
   const ld = document.getElementById('loading');
   ld.classList.add('fade');
   setTimeout(() => ld.classList.remove('on', 'fade'), 700);
@@ -645,12 +758,24 @@ window.addEventListener('touchend', () => isDragging = false);
 
 
 function launch() {
+  playerErrorShown = false;
   document.getElementById('splash').classList.add('hide');
   document.getElementById('loading').classList.add('on');
+  // FIX: if nothing calls onCanPlay() within a reasonable time (WebGL
+  // stalled, HLS never resolves, Worker/CDN unreachable, etc.) the viewer
+  // was left staring at the spinner forever with no explanation. 18s covers
+  // slow mobile networks without making people wait too long for a real
+  // failure to surface.
+  clearTimeout(loadTimeoutTimer);
+  loadTimeoutTimer = setTimeout(() => {
+    if (!playerActive) showPlayerError('Не вдалось завантажити відео за розумний час.');
+  }, 18000);
   initThree();
 }
 
 function goBack() {
+  clearTimeout(loadTimeoutTimer);
+  disarmStallWatchdog();
   if (video) video.pause();
   // FIX: destroy HLS instance to free memory
   if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
@@ -680,6 +805,7 @@ function setPPIcon(p) {
     : '<polygon points="5 3 19 12 5 21"/>';
 }
 function updateProgress() {
+  armStallWatchdog(); // FIX: 'timeupdate' firing at all means real progress — reset the stall clock
   if (!video || !video.duration) return;
   document.getElementById('pfill').style.width = (video.currentTime / video.duration * 100) + '%';
   document.getElementById('tcur').textContent = fmt(video.currentTime);

@@ -66,9 +66,6 @@ input::placeholder{color:var(--muted);}
 .plat-browser .pico{background:rgba(96,165,250,.15);}
 .plat-vr{color:var(--gold);}
 .plat-vr .pico{background:rgba(212,168,67,.15);}
-.warn{background:rgba(212,168,67,.05);border:1px solid rgba(212,168,67,.18);border-radius:8px;padding:.65rem 1rem;font-size:.76rem;color:var(--muted);margin-top:.75rem;line-height:1.5;}
-.warn b{color:var(--gold);}
-.json-preview{background:rgba(0,0,0,.3);border:1px solid rgba(255,255,255,.07);border-radius:8px;padding:.75rem 1rem;font-size:.68rem;color:var(--text);word-break:break-all;line-height:1.6;font-family:monospace;max-height:180px;overflow-y:auto;white-space:pre;}
 
 /* BATCH */
 #mode-batch{display:none;}
@@ -172,7 +169,7 @@ input::placeholder{color:var(--muted);}
         <input type="url" id="s-video-url" placeholder="https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8" oninput="sGenerate()"/>
       </div>
       <div class="field">
-        <label>Video title (shown in DeoVR)</label>
+        <label>Video title</label>
         <input type="text" id="s-title" placeholder="e.g. Korty Twerk Vol.3" oninput="sGenerate()"/>
       </div>
       <div class="field">
@@ -205,7 +202,7 @@ input::placeholder{color:var(--muted);}
         <div class="result-platform-body">
           <div class="result-url" id="s-url-browser">—</div>
           <div class="btn-row">
-            <button class="btn-copy" id="s-copy-browser" onclick="sCopyUrl('browser')">
+            <button class="btn-copy" id="s-copy-browser" onclick="sCopyUrl()">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Copy Browser Link
             </button>
@@ -216,40 +213,6 @@ input::placeholder{color:var(--muted);}
           </div>
         </div>
       </div>
-
-      <div class="result-platform">
-        <div class="result-platform-header plat-vr">
-          <div class="pico">🥽</div>
-          <div>
-            <div style="font-weight:500;color:var(--gold)">VR Headset (DeoVR)</div>
-            <div style="font-size:.63rem;color:var(--muted);margin-top:.1rem">Opens directly in DeoVR with correct settings</div>
-          </div>
-        </div>
-        <div class="result-platform-body">
-          <div class="result-url" id="s-url-deovr">—</div>
-          <div class="btn-row">
-            <button class="btn-copy" id="s-copy-deovr" onclick="sCopyUrl('deovr')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Copy DeoVR Link
-            </button>
-          </div>
-          <div class="warn">🥽 Tap this link on the <b>VR headset browser</b> (Quest, Pico) — DeoVR opens automatically.</div>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-          DeoVR JSON
-        </div>
-        <div class="json-preview" id="s-json-preview">—</div>
-        <div class="btn-row" style="margin-top:.8rem;">
-          <button class="btn-copy" onclick="sCopyJson()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy JSON
-          </button>
-        </div>
-      </div>
     </div>
   </div>
 
@@ -257,7 +220,7 @@ input::placeholder{color:var(--muted);}
   <div id="mode-batch">
     <div class="card" style="padding:1.2rem 1.5rem;margin-bottom:1.2rem;">
       <div style="font-size:.8rem;color:var(--muted);line-height:1.7;">
-        Add up to <b style="color:var(--text)">20 videos</b> at once. Fill each row, press <b style="color:var(--gold2)">Generate All</b> — browser + DeoVR links for every video instantly. Copy individually or export as .txt file.
+        Add up to <b style="color:var(--text)">20 videos</b> at once. Fill each row, press <b style="color:var(--gold2)">Generate All</b> — browser links for every video instantly. Copy individually or export as .txt file.
       </div>
     </div>
 
@@ -296,14 +259,14 @@ input::placeholder{color:var(--muted);}
     <ol class="steps">
       <li><div class="step-num">1</div><div class="step-text">Upload video to <b>Bunny Stream</b> → copy <b>HLS Playlist URL</b></div></li>
       <li><div class="step-num">2</div><div class="step-text">Paste URL + title, choose type → Generate</div></li>
-      <li><div class="step-num">3</div><div class="step-text">In Patreon post: <b>📱 Browser link</b> for everyone + <b>🥽 DeoVR link</b> for headset users</div></li>
+      <li><div class="step-num">3</div><div class="step-text">In Patreon post: <b>📱 Browser link</b> as "Watch Online" (works everywhere, incl. VR headset browsers)</div></li>
       <li><div class="step-num">4</div><div class="step-text">Use <b>Batch mode</b> to process 5–20 videos at once and export all links</div></li>
     </ol>
   </div>
 
 </div>
 <script>
-let sCurrentType='180',sCurrentBrowserUrl='',sCurrentDeovrUrl='',sCurrentJson='';
+let sCurrentType='180',sCurrentBrowserUrl='';
 let bRows=[],bNextId=1;
 
 window.addEventListener('load',()=>{
@@ -332,27 +295,11 @@ function switchMode(mode){
   document.getElementById('mode-batch').style.display=mode==='batch'?'':'none';
 }
 
-function hashCode(str){let h=0;for(let i=0;i<str.length;i++)h=Math.imul(31,h)+str.charCodeAt(i)|0;return h;}
-
-// ⚠️ ЗАМІНИ на ту саму адресу Worker'а, що і в index.html / deo.html
-const WORKER_ORIGIN='https://vrkings-proxy.vrkings-r.workers.dev';
-
-function buildUrls(videoUrl,title,type){
+function buildUrls(videoUrl,type){
   const base=getBase();
   if(!base||!videoUrl)return null;
   const browserUrl=`${base}/index.html?v=${encodeURIComponent(videoUrl)}&type=${type}`;
-  const screenType=type==='180'?'dome':'sphere';
-  const stereoMode=type==='180'?'sbs':'off';
-  const is3d=type==='180';
-  const deoType=type==='180'?'sbs':'360';
-  // DeoVR лінк веде на Worker — той сам згенерує тимчасовий підписаний лінк
-  // у момент, коли шолом відкриє посилання (а не вшиває вічний лінк зараз)
-  const deovrUrl='deovr://'+WORKER_ORIGIN+'/deovr?url='+encodeURIComponent(videoUrl)+'&type='+deoType+'&title='+encodeURIComponent(title||'VR KINGS Video');
-  // Прев'ю нижче — просто приклад структури; реальний JSON з тимчасовим
-  // лінком генерує Worker динамічно щоразу, коли хтось відкриває DeoVR-лінк
-  const json={title:title||'VR KINGS Video',id:Math.abs(hashCode(videoUrl)),is3d,screenType,stereoMode,skipIntro:0,encodings:[{name:"hls",videoSources:[{resolution:2700,url:"<генерується Worker'ом, діє ~15 хв>"}]}]};
-  const jsonStr=JSON.stringify(json,null,2);
-  return{browserUrl,deovrUrl,jsonStr};
+  return{browserUrl};
 }
 
 function copyText(text,btn){
@@ -377,22 +324,16 @@ function sCheckBtn(){
 function sGenerate(){
   sCheckBtn();
   const videoUrl=document.getElementById('s-video-url').value.trim();
-  const title=document.getElementById('s-title').value.trim();
-  const result=buildUrls(videoUrl,title,sCurrentType);
+  const result=buildUrls(videoUrl,sCurrentType);
   if(!result){document.getElementById('result-single').classList.remove('show');return;}
   sCurrentBrowserUrl=result.browserUrl;
-  sCurrentDeovrUrl=result.deovrUrl;
-  sCurrentJson=result.jsonStr;
   document.getElementById('s-url-browser').textContent=result.browserUrl;
-  document.getElementById('s-url-deovr').textContent=result.deovrUrl.slice(0,80)+'…';
-  document.getElementById('s-json-preview').textContent=result.jsonStr;
   document.getElementById('s-open-browser').href=result.browserUrl;
   document.getElementById('result-single').classList.add('show');
 }
-function sCopyUrl(which){
-  copyText(which==='browser'?sCurrentBrowserUrl:sCurrentDeovrUrl,document.getElementById(which==='browser'?'s-copy-browser':'s-copy-deovr'));
+function sCopyUrl(){
+  copyText(sCurrentBrowserUrl,document.getElementById('s-copy-browser'));
 }
-function sCopyJson(){navigator.clipboard.writeText(sCurrentJson).then(()=>alert('JSON copied!'));}
 document.addEventListener('DOMContentLoaded',()=>{
   const v=document.getElementById('s-video-url');
   if(v)v.addEventListener('input',sCheckBtn);
@@ -402,7 +343,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 function bAddRow(){
   if(bRows.length>=20){alert('Max 20 videos.');return;}
   const id=bNextId++;
-  bRows.push({id,url:'',title:'',type:'360',browserUrl:'',deovrUrl:'',open:true});
+  bRows.push({id,url:'',title:'',type:'360',browserUrl:'',open:true});
   bRender();bCheckBtn();
 }
 function bRemoveRow(id){bRows=bRows.filter(r=>r.id!==id);bRender();bCheckBtn();bUpdateExport();}
@@ -410,7 +351,7 @@ function bToggleRow(id){const r=bRows.find(r=>r.id===id);if(r){r.open=!r.open;bR
 function bSetType(id,type){const r=bRows.find(r=>r.id===id);if(r){r.type=type;bRender();}}
 function bInputChange(id,field,value){
   const r=bRows.find(r=>r.id===id);
-  if(r){r[field]=value;r.browserUrl='';r.deovrUrl='';bCheckBtn();}
+  if(r){r[field]=value;r.browserUrl='';bCheckBtn();}
 }
 function bCheckBtn(){
   const hasAny=bRows.some(r=>r.url.trim());
@@ -420,8 +361,8 @@ function bCheckBtn(){
 function bGenerateAll(){
   bRows.forEach(row=>{
     if(!row.url.trim())return;
-    const result=buildUrls(row.url.trim(),row.title.trim(),row.type);
-    if(result){row.browserUrl=result.browserUrl;row.deovrUrl=result.deovrUrl;}
+    const result=buildUrls(row.url.trim(),row.type);
+    if(result){row.browserUrl=result.browserUrl;}
   });
   bRender();bUpdateExport();
 }
@@ -437,7 +378,6 @@ function bCopyAll(){
     if(!row.browserUrl)return;
     lines.push(`=== ${row.title||'Video '+(i+1)} ===`);
     lines.push(`📱 Browser: ${row.browserUrl}`);
-    lines.push(`🥽 DeoVR:   ${row.deovrUrl}`);
     lines.push('');
   });
   navigator.clipboard.writeText(lines.join('\n')).then(()=>alert('All links copied!'));
@@ -449,7 +389,6 @@ function bExport(){
     lines.push(`VIDEO ${i+1}: ${row.title||'Untitled'}`);
     lines.push(`Type: ${row.type}`);
     lines.push(`📱 Browser: ${row.browserUrl}`);
-    lines.push(`🥽 DeoVR:   ${row.deovrUrl}`);
     lines.push('-'.repeat(40),'');
   });
   const a=document.createElement('a');
@@ -457,10 +396,10 @@ function bExport(){
   a.download='vrkings-links-'+Date.now()+'.txt';
   a.click();
 }
-function bCopyRowUrl(id,which){
+function bCopyRowUrl(id){
   const row=bRows.find(r=>r.id===id);
   if(!row)return;
-  copyText(which==='browser'?row.browserUrl:row.deovrUrl,document.getElementById(`b-copy-${which}-${id}`));
+  copyText(row.browserUrl,document.getElementById(`b-copy-browser-${id}`));
 }
 function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
@@ -506,17 +445,9 @@ function bRender(){
             <div class="result-mini">
               <div class="result-mini-label">📱 Browser / Phone</div>
               <div class="result-mini-url">${esc(row.browserUrl)}</div>
-              <button class="btn-copy-mini" id="b-copy-browser-${row.id}" onclick="bCopyRowUrl(${row.id},'browser')">
+              <button class="btn-copy-mini" id="b-copy-browser-${row.id}" onclick="bCopyRowUrl(${row.id})">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
                 Copy Browser Link
-              </button>
-            </div>
-            <div class="result-mini">
-              <div class="result-mini-label">🥽 DeoVR Headset</div>
-              <div class="result-mini-url">${esc(row.deovrUrl.slice(0,80))}…</div>
-              <button class="btn-copy-mini" id="b-copy-deovr-${row.id}" onclick="bCopyRowUrl(${row.id},'deovr')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                Copy DeoVR Link
               </button>
             </div>
           </div>
