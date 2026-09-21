@@ -347,15 +347,24 @@ function buildUrls(videoUrl,title,type){
   const deoType=type==='180'?'sbs':'360';
   // DeoVR лінк веде на Worker — той сам згенерує тимчасовий підписаний лінк
   // у момент, коли шолом відкриє посилання (а не вшиває вічний лінк зараз)
-  // REVERTED: 'deovr://' (подвійний слеш) — офіційний формат з deovr.com/app/doc
-  // ("deovr://https://www.deovr.com/something.json"), підтверджено forum.deovr.com.
-  // Раніше тут стояло 'deovr:' (одна двокрапка), бо WHATWG URL-парсер /
-  // NSURL справді пошкоджує вкладений https://... при читанні через .href
-  // (двокрапка після "https" зникає) — це технічно вірно для стандартного
-  // парсингу, але сам застосунок DeoVR не читає deep link через такий
-  // об'єкт URL, а хоче саме документований подвійний слеш. Той самий
-  // фікс/відкат, що й у index.html.
-  const deovrUrl='deovr://'+WORKER_ORIGIN+'/deovr?url='+encodeURIComponent(videoUrl)+'&type='+deoType+'&title='+encodeURIComponent(title||'VR KINGS Video');
+  // deovr.com/app/doc документує лише "deovr://" + <сирий https URL БЕЗ
+  // query-рядка>. Наш URL Worker'а має власний "?url=...&type=...&title=...",
+  // а live-tail на Worker'і показав нуль вхідних запитів на реальному Quest
+  // (DeoVR відкривається, вічний спінер) — тобто обрив ДО мережевого запиту,
+  // всередині власного парсингу deep link'а самим DeoVR/Quest. Підтверджено
+  // прямим відтворенням: якщо прогнати точний рядок через generic RFC 3986
+  // URI-парсер (те саме правило, за яким Android Uri.parse() розбирає
+  // authority при диспетчеризації "deovr://" intent'у), "https://vrkings-
+  // proxy..." одразу після "deovr://" ламається — "https:" забирається як
+  // authority, двокрапка губиться — бо наші сирі "?", "&", ":" стоять саме
+  // там, де парсер очікує кінець authority-компонента. Percent-encode
+  // усього вкладеного Worker URL прибирає всі символи, які будь-який
+  // generic URI-парсер міг би сплутати з межею authority/path/query.
+  // ПРИМІТКА: це вже за межами того, що реально документовано в
+  // deovr.com/app/doc (там немає прикладу з query-рядком у вкладеному URL) —
+  // це найкраща гіпотеза на основі RFC 3986 для нашого конкретного випадку,
+  // а не підтверджений документацією факт. Той самий фікс, що й у index.html.
+  const deovrUrl='deovr://'+encodeURIComponent(WORKER_ORIGIN+'/deovr?url='+encodeURIComponent(videoUrl)+'&type='+deoType+'&title='+encodeURIComponent(title||'VR KINGS Video'));
   // Прев'ю нижче — просто приклад структури; реальний JSON з тимчасовим
   // лінком генерує Worker динамічно щоразу, коли хтось відкриває DeoVR-лінк
   const json={title:title||'VR KINGS Video',id:Math.abs(hashCode(videoUrl)),is3d,screenType,stereoMode,skipIntro:0,encodings:[{name:"hls",videoSources:[{resolution:2700,url:"<генерується Worker'ом, діє ~15 хв>"}]}]};

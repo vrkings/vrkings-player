@@ -296,20 +296,25 @@ if (!VIDEO_URL) {
     + '&title=' + encodeURIComponent(document.title || 'VR KINGS');
 
   const deoJsonUrl = WORKER_ORIGIN + '/deovr' + deoParams;
-  // REVERTED (see forum.deovr.com/d/10120 + deovr.com/app/doc, which
-  // literally shows "deovr://https://www.deovr.com/something.json" as the
-  // documented deep-link format): this was briefly changed to 'deovr:'
-  // (single colon) because passing the double-slash form through a
-  // standard URL object's .href getter — confirmed with both Node's WHATWG
-  // URL and real iOS NSURL — silently corrupts it ("https://" becomes
-  // "https//"). That test was correct about generic URL-object parsing,
-  // but DeoVR itself does not go through that round-trip for the deep
-  // link's payload — it wants the literal documented double-slash form.
-  // The single-colon version opened DeoVR but played nothing on a real
-  // Quest. Back to 'deovr://' — the raw `deepLink` string below is what
-  // actually gets handed to location.href in the click handler, not the
-  // (possibly browser-normalized) deoLinkEl.href read back afterward.
-  const deepLink = 'deovr://' + deoJsonUrl;
+  // deovr.com/app/doc documents "deovr://" + <raw https URL> with NO
+  // example of a nested URL that itself has a query string. Our deoJsonUrl
+  // does (?url=...&type=...&title=...), and live-tail on the Worker
+  // (zero requests ever arrive, though DeoVR opens and spins forever)
+  // showed the failure happens before any HTTP call — i.e. inside DeoVR/
+  // Quest's own parsing of the incoming deep link, not in our JSON.
+  // Confirmed by direct reproduction: running our exact literal deep-link
+  // string through a generic RFC 3986 URI parser (same authority-parsing
+  // rule Android's Uri class uses when the OS dispatches a "deovr://"
+  // intent) turns "https://vrkings-proxy..." right after "deovr://" into
+  // a corrupted authority — "https:" gets cut off as the host, dropping
+  // the colon, because our un-encoded "?"/"&"/":" sit exactly where a
+  // URI authority component is expected to end. Percent-encoding the
+  // whole nested Worker URL as one opaque blob removes every character a
+  // generic URI parser could misread as an authority/path/query boundary.
+  // NOTE: this goes beyond what deovr.com/app/doc actually documents —
+  // it's the best RFC-3986-grounded hypothesis for OUR case (query string
+  // in the nested URL), not a confirmed fact from DeoVR's own docs.
+  const deepLink = 'deovr://' + encodeURIComponent(deoJsonUrl);
 
   const deoLinkEl = document.getElementById('deovr-link');
   deoLinkEl.href = deepLink;
