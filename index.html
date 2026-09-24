@@ -143,11 +143,11 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
 <canvas id="canvas"></canvas>
 <div id="nourl"><h2>No video link</h2><p>Add a video link to the URL like this:</p><code id="example-url"></code></div>
 <div id="playerError">
-  <h2>Щось пішло не так</h2>
-  <p id="playerErrorMsg">Не вдалось завантажити відео.</p>
-  <button onclick="location.reload()">Спробувати ще раз</button>
+  <h2>Something went wrong</h2>
+  <p id="playerErrorMsg">The video could not be loaded.</p>
+  <button onclick="location.reload()">Try again</button>
 </div>
-<div id="contextStatus">Відновлення з'єднання з відеокартою…</div>
+<div id="contextStatus">Reconnecting to the graphics card…</div>
 <div id="splash">
   <div class="glow"></div>
   <div class="splash-inner">
@@ -254,18 +254,44 @@ const VIDEO_URL = getVideoURL();
 const VIDEO_TYPE = new URLSearchParams(window.location.search).get('type') || '360'; // '180' or '360'
 const IS_180 = VIDEO_TYPE === '180';
 
+// Phones/tablets: cap quality at 1440p and start lower. Quest Browser reports
+// a desktop-like UA (no "Mobile"), so headsets keep the full ladder.
+const IS_MOBILE = (navigator.userAgentData && navigator.userAgentData.mobile) ||
+  /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+  (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1); // iPadOS
+const MAX_HEIGHT = IS_MOBILE ? 1440 : Infinity;
+const START_HEIGHT = IS_MOBILE ? 720 : 1080;
+
+// Manual quality choice is remembered by HEIGHT (not level index — ladders
+// differ between videos) and only for THIS video in this tab, so every new
+// video starts on Auto. The old global index-based key made one 4K click
+// stick to every later video.
+const QUALITY_KEY = 'vr-quality-height:' + VIDEO_URL;
+try { localStorage.removeItem('vr-quality-lock'); } catch (e) {}
+function getQualityLock() {
+  try { const h = parseInt(sessionStorage.getItem(QUALITY_KEY), 10); return h > 0 ? h : null; } catch (e) { return null; }
+}
+function setQualityLock(h) {
+  try { if (h) sessionStorage.setItem(QUALITY_KEY, h); else sessionStorage.removeItem(QUALITY_KEY); } catch (e) {}
+}
+
 if (!VIDEO_URL) {
   document.getElementById('nourl').classList.add('show');
   document.getElementById('splash').style.display = 'none';
   document.getElementById('example-url').textContent = window.location.origin + '/index.html?v=https://vz-XXXX.b-cdn.net/VIDEO_ID/playlist.m3u8';
 }
 
-let renderer, scene, camera, videoTexture, video;
+let renderer, scene, camera, videoTexture, video, sphereMesh;
 let hlsInstance = null; // FIX: moved to top scope so goBack() can reach it
 let loadTimeoutTimer = null;
 let stallTimer = null;
 const STALL_TIMEOUT_MS = 20000;
 let playerErrorShown = false;
+let useNativeHls = false;   // true when Safari's own HLS is used (hls.js unsupported)
+let fatalRecoveries = 0;    // hls.js fatal-error rebuilds since playback last worked
+const MAX_FATAL_RECOVERIES = 2;
+let userPaused = false;     // distinguishes a viewer's pause from iOS auto-pausing on unmute
+let lastGoodTime = 0;       // last real playback position (a failed hls.js instance empties the element to 0)
 
 /**
  * Shows a visible, user-facing error instead of leaving the viewer staring
@@ -295,12 +321,17 @@ function showPlayerError(message) {
  * ~20s pass with no progress at all, whatever the cause (stalled buffering,
  * a stuck NETWORK_ERROR retry loop, anything else) — same visible
  * error+retry UI as the initial-load case.
+ *
+ * FIX: only armed while the video is meant to be playing. A viewer's own
+ * pause stops 'timeupdate' too, so pausing for 20s used to show the
+ * "playback stopped" error. Pause disarms it; play re-arms it.
  */
 function armStallWatchdog() {
   clearTimeout(stallTimer);
+  if (!video || video.paused) return;
   stallTimer = setTimeout(() => {
     console.warn('Playback stalled for', STALL_TIMEOUT_MS / 1000, 's with no progress');
-    showPlayerError('Відтворення зупинилось. Перевірте з’єднання і спробуйте ще раз.');
+    showPlayerError('Playback stopped. Check your connection and try again.');
   }, STALL_TIMEOUT_MS);
 }
 
@@ -323,8 +354,7 @@ function disarmStallWatchdog() {
   playerCanvas.addEventListener('webglcontextlost', function (e) {
     e.preventDefault();
     console.warn('WebGL context lost — attempting recovery');
-    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
-    if (video) video.pause();
+    teardownVideo();
     clearTimeout(sessionRefreshTimer);
     disarmStallWatchdog(); // FIX: no timeupdate will fire while we're recovering — don't let the stall watchdog fire mid-recovery
     document.getElementById('contextStatus').classList.add('show');
@@ -337,7 +367,7 @@ function disarmStallWatchdog() {
       initThree();
     } catch (err) {
       console.error('Reinit after context restore failed:', err);
-      showPlayerError('Не вдалось відновити відеоплеєр після втрати з’єднання з відеокартою.');
+      showPlayerError('The video player lost access to the graphics card and could not recover.');
     }
   }, false);
 })();
@@ -375,7 +405,7 @@ window.addEventListener('touchmove', e => {
     if (Math.abs(delta) > 8) { changeZoom(delta > 0 ? -1 : 1); lastPinchDist = dist; }
   }
 }, { passive: true });
-window.addEventListener('touchend', () => { if (event.touches.length < 2) lastPinchDist = null; }, { passive: true });
+window.addEventListener('touchend', e => { if (e.touches.length < 2) lastPinchDist = null; }, { passive: true });
 
 // The URL hls.js actually loads — always a short-lived Worker-signed proxy
 // link from resolveStreamUrl(). Starts null: there is no usable value before
@@ -408,6 +438,31 @@ async function resolveStreamUrl(rawUrl) {
   return await res.json();
 }
 
+let sessionExpires = 0; // unix seconds when ACTIVE_STREAM_URL stops working
+
+/**
+ * Fetches a fresh session and swaps it into the running player — hls.js is
+ * rebuilt at the same quality + position; Safari's native HLS just gets the
+ * new src (FIX: the refresh used to call setupHls() there too, which built an
+ * hls.js instance on browsers that can't run it).
+ */
+async function refreshSession() {
+  const session = await resolveStreamUrl(VIDEO_URL);
+  ACTIVE_STREAM_URL = session.proxyUrl;
+  sessionExpires = session.expires || (Date.now() / 1000 + (session.ttl || 900));
+  if (useNativeHls) {
+    const t = video.currentTime, wasPlaying = !video.paused;
+    video.src = ACTIVE_STREAM_URL;
+    video.addEventListener('loadedmetadata', () => {
+      if (t > 0) video.currentTime = t;
+      if (wasPlaying) video.play().catch(() => {});
+    }, { once: true });
+  } else {
+    setupHls(getQualityLock(), video.currentTime, false);
+  }
+  scheduleSessionRefresh(session.ttl);
+}
+
 /**
  * The Worker's proxy link expires (~15 min by default). While someone is
  * actively watching, quietly fetch a fresh session shortly before it
@@ -420,229 +475,238 @@ function scheduleSessionRefresh(ttlSeconds) {
   sessionRefreshTimer = setTimeout(async () => {
     if (!playerActive) return; // viewer left the player, no need to refresh
     try {
-      const session = await resolveStreamUrl(VIDEO_URL);
-      ACTIVE_STREAM_URL = session.proxyUrl;
-      const savedLock = localStorage.getItem('vr-quality-lock');
-      const level = savedLock !== null ? parseInt(savedLock) : -1;
-      setupHls(level, video.currentTime, false);
-      scheduleSessionRefresh(session.ttl);
+      await refreshSession();
     } catch (err) {
       // The old proxy link may still have a bit of validity left (this
       // runs ~60s before actual expiry) — retry soon rather than killing
-      // an otherwise-working session over one missed refresh. If the
-      // Worker stays down until the link truly expires, hls.js's own
-      // fatal-error handling (and the load-timeout watchdog, on the next
-      // fresh load) takes over from there.
+      // an otherwise-working session over one missed refresh.
       console.warn('Session refresh failed, retrying shortly:', err);
       scheduleSessionRefresh(30);
     }
   }, refreshInMs);
 }
 
+// FIX: timers don't run while a phone is locked or the tab is in the
+// background, so coming back after >15 min meant an expired link and a
+// dead player. Refresh right away if the link is (nearly) expired.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !playerActive || !ACTIVE_STREAM_URL) return;
+  if (Date.now() / 1000 > sessionExpires - 60) {
+    refreshSession().catch(err => console.warn('Refresh on return failed:', err));
+  }
+});
+
+// ── Quality ladder helpers (all by HEIGHT, never by raw level index) ──────
+function levelHeight(l) { return (l && l.height) || 0; }
+
+// Highest level index whose height is <= maxH (falls back to the lowest level).
+function highestLevelUpTo(levels, maxH) {
+  let best = -1;
+  levels.forEach((l, i) => {
+    if (levelHeight(l) <= maxH && (best === -1 || levelHeight(l) >= levelHeight(levels[best]))) best = i;
+  });
+  if (best !== -1) return best;
+  let lowest = 0;
+  levels.forEach((l, i) => { if (levelHeight(l) < levelHeight(levels[lowest])) lowest = i; });
+  return lowest;
+}
+
 /**
- * (Re)builds the hls.js instance at a specific quality level and resumes
- * playback at `resumeAt` seconds.
+ * Asks the browser (MediaCapabilities) which levels it can decode SMOOTHLY
+ * and returns the index of the tallest such level, or -1 if unknown (API
+ * missing, errors, or nothing reported smooth — then no extra cap applies).
+ */
+async function highestSmoothLevel(levels) {
+  if (!navigator.mediaCapabilities || !navigator.mediaCapabilities.decodingInfo) return -1;
+  try {
+    const results = await Promise.all(levels.map(l => navigator.mediaCapabilities.decodingInfo({
+      type: 'media-source',
+      video: {
+        contentType: 'video/mp4; codecs="' + (l.videoCodec || 'avc1.640028') + '"',
+        width: l.width || 1920,
+        height: l.height || 1080,
+        bitrate: l.bitrate || 5000000,
+        framerate: l.frameRate || 30,
+      },
+    }).catch(() => null)));
+    let best = -1;
+    results.forEach((r, i) => {
+      if (r && r.supported && r.smooth && (best === -1 || levelHeight(levels[i]) > levelHeight(levels[best]))) best = i;
+    });
+    return best;
+  } catch (e) {
+    return -1;
+  }
+}
+
+/**
+ * (Re)builds the hls.js instance and resumes playback at `resumeAt` seconds.
  *
  * FIX (Safari freeze bug): switching quality via hls.js's live level
  * APIs (currentLevel / loadLevel / nextLevel) works fine in Chrome, but
  * in Safari it reliably freezes the video track while audio keeps
- * playing — Safari's MediaSource is much stricter about swapping init
- * segments between renditions than Chrome's, and this version of hls.js
- * doesn't handle that handoff cleanly there. The only combination that's
- * reliably smooth in both browsers is a full teardown + rebuild of the
- * Hls instance at the desired starting level — effectively what reloading
- * the page did to "fix" it for viewers, but done in place without losing
- * playback position.
+ * playing. The only combination that's reliably smooth in both browsers
+ * is a full teardown + rebuild of the Hls instance at the desired level.
  *
- * @param {number} startLevel -1 for auto, otherwise a specific level index
- * @param {number} resumeAt   seconds to seek to once the new instance is ready
- * @param {boolean} isInitial true only for the very first setup (splash → play)
+ * Loading is started manually (autoStartLoad: false) from MANIFEST_PARSED,
+ * once the level list is known, so the start level / mobile cap / manual
+ * lock are all in place BEFORE the first fragment is requested, and loading
+ * begins directly at `resumeAt` instead of at 0.
+ *
+ * @param {number|null} lockHeight manual quality (video height) or null for Auto
+ * @param {number} resumeAt   seconds to resume at
+ * @param {boolean} forcePlay play after (re)build regardless of the element's
+ *   current paused state (first start, and recovery — a failed instance has
+ *   already emptied the element, which resets it to paused)
  */
-function setupHls(startLevel, resumeAt, isInitial) {
-  const wasPlaying = isInitial ? true : !video.paused;
+function setupHls(lockHeight, resumeAt, forcePlay) {
+  const wasPlaying = forcePlay ? true : !video.paused;
 
   if (hlsInstance) {
     hlsInstance.destroy();
     hlsInstance = null;
   }
 
-  hlsInstance = new Hls({
+  const hls = hlsInstance = new Hls({
     enableWorker: false,                // FIX: disable — Safari has known worker/blob quirks with hls.js
-    autoStartLoad: true,
-    maxBufferLength: 60,
-    maxMaxBufferLength: 120,
-    maxBufferSize: 120 * 1000 * 1000,
-    startLevel: startLevel,             // -1 = auto pick, or a specific rung (hint only, see below)
-    // TUNE: was 20_000_000 (~20Mbps). Against our real bitrate ladder
-    // (240p≈0.68M … 1440p≈9.8M, 2160p≈42.2M), that estimate × the 0.95
-    // abrBandWidthFactor clears 1440p (9.8M) on literally every fresh
-    // viewer's very first fragment, regardless of their actual connection
-    // — hls.js's abandon-rules-check (_abandonRulesCheck) does correctly
-    // detect and abort+downgrade a too-slow fragment (confirmed fixed for
-    // the first-fragment case since hls.js 1.4.0, we're on 1.6.13), but
-    // that recovery only kicks in after up to maxStarvationDelay (4s) of
-    // stall — a visible stutter for anyone who can't sustain ~10Mbps.
-    // 7_000_000 targets 1080p (6.3M) as the first attempt instead —
-    // still well above hls.js's own conservative 500Kbps default, but
-    // one full rung less of risk for the middle of the audience.
+    autoStartLoad: false,               // started from MANIFEST_PARSED, see above
+    // Phones: smaller forward buffer — iOS (ManagedMediaSource) and low-RAM
+    // Android evict or crash on 100MB+ of 4K segments.
+    maxBufferLength: IS_MOBILE ? 30 : 60,
+    maxMaxBufferLength: IS_MOBILE ? 60 : 120,
+    maxBufferSize: (IS_MOBILE ? 60 : 120) * 1000 * 1000,
+    // Used only until the first fragments are measured; the start level
+    // itself is set explicitly in MANIFEST_PARSED.
     abrEwmaDefaultEstimate: 7000000,
-    capLevelToPlayerSize: false,
+    // Weak connections: step down sooner, step up more cautiously
+    // (hls.js defaults 0.95 / 0.7).
+    abrBandWidthFactor: 0.8,
+    abrBandWidthUpFactor: 0.6,
+    capLevelToPlayerSize: false,        // 360/180 video: the sphere is far bigger than the screen
   });
 
   // Loads the Worker-proxied link (ACTIVE_STREAM_URL) rather than the raw
   // Bunny URL — the real CDN link never appears in this request.
-  hlsInstance.loadSource(ACTIVE_STREAM_URL);
-  hlsInstance.attachMedia(video);
+  hls.loadSource(ACTIVE_STREAM_URL);
+  hls.attachMedia(video);
 
-  hlsInstance.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-    // FIX: locking the manual level has to happen HERE, not right after
-    // `new Hls()`. Before the manifest is parsed, hls.js doesn't have a
-    // `levels` list yet, so setting currentLevel earlier was silently
-    // ignored and ABR kept climbing back to 4K on its own. Now that levels
-    // exist and nothing has been buffered/played yet, locking here is both
-    // effective AND safe (no mid-playback flush, so no Safari freeze).
-    if (startLevel !== -1) {
-      hlsInstance.currentLevel = startLevel;
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    if (hls !== hlsInstance) return;
+    const levels = hls.levels;
+    const capIdx = highestLevelUpTo(levels, MAX_HEIGHT);
+    if (IS_MOBILE) hls.autoLevelCapping = capIdx; // phones: Auto never goes above 1440p
+    if (lockHeight) {
+      const idx = highestLevelUpTo(levels, Math.min(lockHeight, MAX_HEIGHT));
+      hls.startLevel = idx;
+      hls.loadLevel = idx; // manual level: turns Auto off, no buffer flush
+    } else {
+      // Auto: start around 720p (phones) / 1080p (desktop, headset), then
+      // ABR adapts up or down from real measured bandwidth.
+      hls.startLevel = Math.min(highestLevelUpTo(levels, START_HEIGHT), capIdx);
     }
-    buildQualityMenu(hlsInstance);
+    // Auto must never climb to a level this device can't decode smoothly —
+    // e.g. the 4320x2160 (4K SBS) rung is wider than the 4096px hardware
+    // H.264 limit on most Windows/Android/Quest decoders.
+    highestSmoothLevel(levels).then(smoothIdx => {
+      if (hls !== hlsInstance || smoothIdx < 0) return;
+      const cur = hls.autoLevelCapping;
+      const capped = cur >= 0 ? Math.min(cur, smoothIdx) : smoothIdx;
+      if (capped !== cur) hls.autoLevelCapping = capped;
+    });
+    buildQualityMenu(hls);
     document.getElementById('qual-btn').style.display = 'flex';
     document.getElementById('quality-badge').classList.add('show');
-    if (resumeAt > 0) video.currentTime = resumeAt;
+    hls.startLoad(resumeAt > 0 ? resumeAt : -1);
     if (wasPlaying) video.play().catch(() => {});
   });
 
-  hlsInstance.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-    updateHlsQualityBadge(hlsInstance, data.level);
+  hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+    updateHlsQualityBadge(hls, data.level);
   });
 
-  // FIX: without this, a fatal error (network hiccup, media decode error,
-  // or anything else) just leaves the player stuck on the loading spinner
-  // forever with no way to recover — exactly what was happening in Safari.
-  hlsInstance.on(Hls.Events.ERROR, (_, data) => {
-    if (!data.fatal) return;
+  // FIX: without this, a fatal error just left the player stuck on the
+  // loading spinner forever.
+  let mediaRecoveries = 0;
+  hls.on(Hls.Events.ERROR, (_, data) => {
+    if (!data.fatal || hls !== hlsInstance) return;
     console.warn('hls.js fatal error:', data.type, data.details);
-    switch (data.type) {
-      case Hls.ErrorTypes.NETWORK_ERROR:
-        hlsInstance.startLoad();
-        break;
-      case Hls.ErrorTypes.MEDIA_ERROR:
-        hlsInstance.recoverMediaError();
-        break;
-      default:
-        // Unrecoverable — tear down hls.js and fall back to the browser's
-        // own HLS/video handling so the viewer gets SOMETHING instead of
-        // an infinite spinner. Still uses the proxied URL, not the raw one.
-        hlsInstance.destroy();
-        hlsInstance = null;
-        video.src = ACTIVE_STREAM_URL;
-        video.load();
-        video.play().catch(() => {});
-        break;
+    if (data.type === Hls.ErrorTypes.MEDIA_ERROR && mediaRecoveries < 2) {
+      mediaRecoveries++;
+      hls.recoverMediaError();
+      return;
     }
+    // Network errors (incl. an expired proxy link after the phone slept —
+    // the old code retried the same dead URL forever) and anything else:
+    // fetch a fresh session and rebuild, a limited number of times.
+    // FIX: the old last-resort fallback put the .m3u8 into video.src, which
+    // only Safari can play — in Chrome it was a guaranteed failure.
+    recoverFromFatal();
   });
 }
 
+async function recoverFromFatal() {
+  if (fatalRecoveries >= MAX_FATAL_RECOVERIES) {
+    if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+    showPlayerError('The video could not be loaded. Check your connection and try again.');
+    return;
+  }
+  fatalRecoveries++;
+  const resumeAt = (video && video.currentTime) || lastGoodTime;
+  try {
+    const session = await resolveStreamUrl(VIDEO_URL);
+    if (!video) return; // viewer left the player meanwhile
+    ACTIVE_STREAM_URL = session.proxyUrl;
+    sessionExpires = session.expires || 0;
+    setupHls(getQualityLock(), resumeAt, !userPaused); // keep playing unless the viewer paused
+    scheduleSessionRefresh(session.ttl);
+  } catch (err) {
+    console.error('Recovery failed:', err);
+    showPlayerError('The video could not be loaded. Check your connection and try again.');
+  }
+}
 
-function initThree() {
+/**
+ * Stops and releases the current <video> + hls.js instance. The element is
+ * emptied so the browser drops its decoder and buffers right away.
+ */
+function teardownVideo() {
+  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  if (video) {
+    const old = video;
+    video = null; // listeners below check `this !== video` and go quiet
+    old.pause();
+    old.removeAttribute('src');
+    old.load();
+  }
+  if (videoTexture) { videoTexture.dispose(); videoTexture = null; }
+}
+
+/**
+ * Creates the WebGL renderer, scene, sphere and render loop ONCE.
+ * FIX: this used to run on every launch — Back → Play again stacked a new
+ * renderer, a new resize listener and another requestAnimationFrame loop
+ * each time, so the player got slower with every re-open.
+ * @returns {boolean} false if WebGL is unavailable
+ */
+function ensureScene() {
+  if (renderer) return true;
   const canvas = document.getElementById('canvas');
-
   // FIX: WebGL context creation can fail outright (blocked GPU, hardware
-  // acceleration disabled, too many contexts already open) — previously
-  // this threw an uncaught exception and the viewer was left on the
-  // "Loading…" spinner forever with zero indication anything was wrong.
+  // acceleration disabled, too many contexts already open).
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   } catch (err) {
     console.error('WebGL renderer creation failed:', err);
-    showPlayerError('Не вдалось запустити відеоплеєр на цьому пристрої.');
-    return;
+    showPlayerError('The video player could not start on this device (WebGL unavailable).');
+    return false;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(currentFov, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-  video = document.createElement('video');
-  video.crossOrigin = 'anonymous';
-  video.loop = true;
-  video.playsInline = true;
-  video.muted = true; // FIX: muted required for autoplay on iOS/Android
-  video.setAttribute('webkit-playsinline', '');
-  video.addEventListener('loadedmetadata', () => { document.getElementById('tdur').textContent = fmt(video.duration); });
-  video.addEventListener('timeupdate', updateProgress);
-  video.addEventListener('canplay', onCanPlay, { once: true });
-  // FIX: a network or decode error on the <video> element was never
-  // surfaced anywhere — the viewer just saw the loading spinner hang.
-  video.addEventListener('error', () => {
-    console.error('video element error:', video.error);
-    showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
-  });
-  video.addEventListener('waiting', () => document.getElementById('buffering').classList.add('show'));
-  video.addEventListener('playing', () => {
-    document.getElementById('buffering').classList.remove('show');
-    // Unmute after first play starts (user already interacted via launch button)
-    if (video.muted) {
-      video.muted = false;
-      document.getElementById('vol').value = 1;
-    }
-  });
-  video.addEventListener('canplaythrough', () => document.getElementById('buffering').classList.remove('show'));
-
-  if (VIDEO_URL.includes('.m3u8')) {
-    if (Hls.isSupported()) {
-      // ── hls.js — used in EVERY browser where it works (Chrome, Firefox,
-      // Edge, Android, and modern Safari too — MSE is supported there).
-      // Native HLS (Safari's built-in player) gives the browser zero
-      // visibility/control over level switching — no manual quality
-      // button, no ABR tuning. Using hls.js everywhere it's supported
-      // means every viewer gets the manual quality menu AND proper
-      // adaptive bitrate behavior.
-      const savedLockOnLoad = localStorage.getItem('vr-quality-lock');
-      const initialLevel = savedLockOnLoad !== null ? parseInt(savedLockOnLoad) : -1;
-      // Ask the Worker for a proxied link before hls.js ever touches the
-      // real Bunny URL — there is no working fallback if this fails (Bunny
-      // 403s any direct/unsigned request), so a failure here is fatal.
-      resolveStreamUrl(VIDEO_URL).then(session => {
-        ACTIVE_STREAM_URL = session.proxyUrl;
-        setupHls(initialLevel, 0, true); // start directly at saved level (or auto), autoplay via onCanPlay
-        scheduleSessionRefresh(session.ttl);
-      }).catch(err => {
-        console.error('Failed to get a playable stream link:', err);
-        showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
-      });
-    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      // ── Native HLS fallback — only reached when hls.js genuinely can't
-      // run (very old browsers without MediaSource Extensions support).
-      // No manual quality control is possible here; the browser's own
-      // player picks quality with no override available.
-      resolveStreamUrl(VIDEO_URL).then(session => {
-        ACTIVE_STREAM_URL = session.proxyUrl;
-        video.src = ACTIVE_STREAM_URL;
-        scheduleSessionRefresh(session.ttl);
-      }).catch(err => {
-        console.error('Failed to get a playable stream link:', err);
-        showPlayerError('Не вдалось завантажити відео. Перевірте з’єднання і спробуйте ще раз.');
-      });
-      video.addEventListener('playing', updateNativeQualityBadge);
-      video.addEventListener('resize',  updateNativeQualityBadge);
-    }
-  } else {
-    // Non-HLS sources (e.g. Dropbox direct links) aren't part of the
-    // Worker's proxy scheme — play as before.
-    video.src = VIDEO_URL;
-    video.load();
-    video.addEventListener('playing', updateNativeQualityBadge);
-    video.addEventListener('resize',  updateNativeQualityBadge);
-  }
-
-  // FIX: Use RGBAFormat instead of deprecated RGBFormat (removed in newer Three.js builds)
-  videoTexture = new THREE.VideoTexture(video);
-  videoTexture.minFilter = THREE.LinearFilter;
-  videoTexture.magFilter = THREE.LinearFilter;
-  videoTexture.format = THREE.RGBAFormat;
-
-  // FIX: 180° SBS — use only left half of UV (left eye), render on hemisphere
-  // 360° — full sphere as before
+  // 180° SBS — only left half of UV (left eye), on a hemisphere.
+  // 360° — full sphere.
   let geo;
   if (IS_180) {
     geo = buildHemi180Geometry();
@@ -650,14 +714,132 @@ function initThree() {
     geo = new THREE.SphereGeometry(500, 128, 64);
     geo.scale(-1, 1, 1);
   }
-
-  scene.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: videoTexture })));
+  sphereMesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  scene.add(sphereMesh);
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
   animate();
+  return true;
+}
+
+/**
+ * Creates the <video> element. Called synchronously from the Play tap so
+ * that play() runs inside the user gesture — iOS then lets the same element
+ * play WITH sound later (after the async session fetch), instead of pausing
+ * it the moment we unmute.
+ */
+function createVideoElement() {
+  video = document.createElement('video');
+  video.crossOrigin = 'anonymous';
+  video.loop = true;
+  video.playsInline = true;
+  video.muted = true; // muted required for autoplay on iOS/Android
+  video.setAttribute('webkit-playsinline', '');
+  video.play().catch(() => {}); // "bless" the element inside the tap (no src yet — rejection is expected)
+  return video;
+}
+
+function initThree() {
+  if (!ensureScene()) return;
+  if (!video) createVideoElement();
+  const v = video;
+  const mine = fn => function (e) { if (v === video) fn(e); }; // ignore events from torn-down elements
+
+  userPaused = false;
+  fatalRecoveries = 0;
+  lastGoodTime = 0;
+  v.addEventListener('loadedmetadata', mine(() => { document.getElementById('tdur').textContent = fmt(v.duration); }));
+  v.addEventListener('timeupdate', mine(updateProgress));
+  v.addEventListener('canplay', mine(onCanPlay), { once: true });
+  // FIX: a network or decode error on the <video> element was never
+  // surfaced anywhere — the viewer just saw the loading spinner hang.
+  // With hls.js the element's own 'error' is handled by recoverFromFatal().
+  v.addEventListener('error', mine(() => {
+    console.error('video element error:', v.error);
+    if (hlsInstance) return;
+    showPlayerError('The video could not be loaded. Check your connection and try again.');
+  }));
+  v.addEventListener('waiting', mine(() => document.getElementById('buffering').classList.add('show')));
+  v.addEventListener('pause', mine(() => { disarmStallWatchdog(); setPPIcon(false); }));
+  v.addEventListener('play', mine(() => { armStallWatchdog(); setPPIcon(true); }));
+  v.addEventListener('playing', mine(() => {
+    document.getElementById('buffering').classList.remove('show');
+    fatalRecoveries = 0; // playback works again
+    // Unmute after first play starts (the viewer tapped Play). If iOS
+    // still refuses sound and pauses instead, go back to muted playback
+    // rather than a frozen picture — the mute button shows it's muted.
+    if (v.muted && !v.dataset.unmuteTried) {
+      v.dataset.unmuteTried = '1';
+      v.muted = false;
+      document.getElementById('vol').value = 1;
+      setTimeout(() => {
+        if (v === video && v.paused && !userPaused) {
+          v.muted = true;
+          v.play().catch(() => {});
+        }
+        updateVolIcon();
+      }, 400);
+    }
+  }));
+  v.addEventListener('canplaythrough', mine(() => document.getElementById('buffering').classList.remove('show')));
+
+  const onSessionError = err => {
+    console.error('Failed to get a playable stream link:', err);
+    showPlayerError('The video could not be loaded. Check your connection and try again.');
+  };
+
+  if (VIDEO_URL.includes('.m3u8')) {
+    if (Hls.isSupported()) {
+      // ── hls.js — used in EVERY browser where it works (Chrome, Firefox,
+      // Edge, Android, Quest, and Safari/iOS 17.1+ via ManagedMediaSource).
+      // Gives the manual quality menu, the mobile cap and ABR tuning.
+      useNativeHls = false;
+      // There is no working fallback if the Worker fails (Bunny rejects
+      // any direct/unsigned request), so a failure here is fatal.
+      resolveStreamUrl(VIDEO_URL).then(session => {
+        if (v !== video) return;
+        ACTIVE_STREAM_URL = session.proxyUrl;
+        sessionExpires = session.expires || 0;
+        setupHls(getQualityLock(), 0, true);
+        scheduleSessionRefresh(session.ttl);
+      }).catch(onSessionError);
+    } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
+      // ── Native HLS fallback — only for browsers without MSE (older
+      // iOS). The browser picks quality itself; no manual override.
+      useNativeHls = true;
+      resolveStreamUrl(VIDEO_URL).then(session => {
+        if (v !== video) return;
+        ACTIVE_STREAM_URL = session.proxyUrl;
+        sessionExpires = session.expires || 0;
+        v.src = ACTIVE_STREAM_URL;
+        scheduleSessionRefresh(session.ttl);
+      }).catch(onSessionError);
+      v.addEventListener('playing', mine(updateNativeQualityBadge));
+      v.addEventListener('resize', mine(updateNativeQualityBadge));
+    } else {
+      showPlayerError('This browser cannot play this video. Please use Chrome, Edge or Safari.');
+      return;
+    }
+  } else {
+    // Non-HLS sources (e.g. Dropbox direct links) aren't part of the
+    // Worker's proxy scheme — play as before.
+    useNativeHls = true;
+    v.src = VIDEO_URL;
+    v.load();
+    v.addEventListener('playing', mine(updateNativeQualityBadge));
+    v.addEventListener('resize', mine(updateNativeQualityBadge));
+  }
+
+  videoTexture = new THREE.VideoTexture(v);
+  videoTexture.minFilter = THREE.LinearFilter;
+  videoTexture.magFilter = THREE.LinearFilter;
+  videoTexture.format = THREE.RGBAFormat;
+  sphereMesh.material.map = videoTexture;
+  sphereMesh.material.color.set(0xffffff);
+  sphereMesh.material.needsUpdate = true;
 }
 
 /**
@@ -734,7 +916,7 @@ function animate() {
     500 * Math.cos(phi),
     500 * Math.sin(phi) * Math.sin(theta)
   );
-  if (videoTexture && video.readyState >= video.HAVE_CURRENT_DATA) videoTexture.needsUpdate = true;
+  if (videoTexture && video && video.readyState >= video.HAVE_CURRENT_DATA) videoTexture.needsUpdate = true;
   renderer.render(scene, camera);
 }
 
@@ -779,7 +961,7 @@ function launch() {
   // failure to surface.
   clearTimeout(loadTimeoutTimer);
   loadTimeoutTimer = setTimeout(() => {
-    if (!playerActive) showPlayerError('Не вдалось завантажити відео за розумний час.');
+    if (!playerActive) showPlayerError('The video is taking too long to load. Check your connection and try again.');
   }, 18000);
   initThree();
 }
@@ -787,10 +969,11 @@ function launch() {
 function goBack() {
   clearTimeout(loadTimeoutTimer);
   disarmStallWatchdog();
-  if (video) video.pause();
-  // FIX: destroy HLS instance to free memory
-  if (hlsInstance) { hlsInstance.destroy(); hlsInstance = null; }
+  // FIX: release the video + hls.js completely; the renderer/scene are kept
+  // and reused on the next Play (see ensureScene()).
+  teardownVideo();
   clearTimeout(sessionRefreshTimer);
+  ACTIVE_STREAM_URL = null;
   qualMenuOpen = false;
   document.getElementById('quality-menu').classList.remove('show');
   document.getElementById('quality-badge').classList.remove('show');
@@ -807,8 +990,8 @@ function goBack() {
 
 function togglePlay() {
   if (!video) return;
-  if (video.paused) { video.play(); setPPIcon(true); }
-  else { video.pause(); setPPIcon(false); }
+  if (video.paused) { userPaused = false; video.play().catch(() => {}); setPPIcon(true); }
+  else { userPaused = true; video.pause(); setPPIcon(false); }
 }
 function setPPIcon(p) {
   document.getElementById('ppico').innerHTML = p
@@ -818,6 +1001,7 @@ function setPPIcon(p) {
 function updateProgress() {
   armStallWatchdog(); // FIX: 'timeupdate' firing at all means real progress — reset the stall clock
   if (!video || !video.duration) return;
+  if (video.currentTime > 0) lastGoodTime = video.currentTime;
   document.getElementById('pfill').style.width = (video.currentTime / video.duration * 100) + '%';
   document.getElementById('tcur').textContent = fmt(video.currentTime);
 }
@@ -826,10 +1010,14 @@ function seekTo(e) {
   const r = document.getElementById('ptrack').getBoundingClientRect();
   video.currentTime = ((e.clientX - r.left) / r.width) * video.duration;
 }
-function setVol(v) { if (video) { video.volume = v; video.muted = (v == 0); } }
+function setVol(v) { if (video) { video.volume = v; video.muted = (v == 0); updateVolIcon(); } }
 function toggleMute() {
   if (!video) return;
   video.muted = !video.muted;
+  updateVolIcon();
+}
+function updateVolIcon() {
+  if (!video) return;
   document.getElementById('volico').innerHTML = video.muted
     ? '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15" stroke="currentColor" stroke-width="2"/><line x1="17" y1="9" x2="23" y2="15" stroke="currentColor" stroke-width="2"/>'
     : '<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>';
@@ -862,13 +1050,14 @@ function updateHlsQualityBadge(hls, levelIdx) {
   const lvl = hls.levels[levelIdx];
   if (!lvl) return;
   const h = lvl.height || 0;
-  const kbps = Math.round((lvl.bitrate || 0) / 1000);
   const label = qualityLabel(h);
   document.getElementById('qval-txt').textContent = label;
   document.getElementById('qual-btn').textContent = label;
-  // Highlight active option in menu
+  // Highlight: "Auto" stays lit while on Auto; the playing height is lit too.
+  const auto = getQualityLock() === null;
   document.querySelectorAll('.qopt[data-level]').forEach(el => {
-    el.classList.toggle('active', parseInt(el.dataset.level) === levelIdx);
+    const idx = parseInt(el.dataset.level, 10);
+    el.classList.toggle('active', idx === -1 ? auto : levelHeight(hls.levels[idx]) === h);
   });
 }
 
@@ -885,60 +1074,43 @@ function qualityLabel(h) {
 function buildQualityMenu(hls) {
   const menu = document.getElementById('quality-menu');
   menu.innerHTML = '';
-  // Label
   const lbl = document.createElement('button');
   lbl.className = 'qopt auto-label';
   lbl.textContent = 'Quality';
   menu.appendChild(lbl);
-  // Auto option
-  const savedLockForAuto = localStorage.getItem('vr-quality-lock');
+
+  const lock = getQualityLock();
   const autoBtn = document.createElement('button');
-  autoBtn.className = 'qopt' + (savedLockForAuto === null ? ' active' : '');
+  autoBtn.className = 'qopt' + (lock === null ? ' active' : '');
   autoBtn.textContent = 'Auto';
   autoBtn.dataset.level = '-1';
   autoBtn.onclick = () => {
-    // FIX: soft-switch (loadLevel/nextLevel) still froze video-with-audio
-    // running in Safari. Full rebuild via setupHls() is the reliable fix
-    // in both Chrome and Safari.
-    localStorage.removeItem('vr-quality-lock');
+    // Full rebuild via setupHls() — soft level switches freeze Safari.
+    setQualityLock(null);
     toggleQualityMenu();
-    setupHls(-1, video.currentTime, false);
+    setupHls(null, video.currentTime, false);
   };
   menu.appendChild(autoBtn);
-  // Per-level options (highest first)
-  [...hls.levels].reverse().forEach((lvl, i) => {
-    const realIdx = hls.levels.length - 1 - i;
-    const h = lvl.height || 0;
-    const kbps = Math.round((lvl.bitrate || 0) / 1000);
-    const btn = document.createElement('button');
-    const is4k = h >= 2160;
-    btn.className = 'qopt' + (realIdx === hls.currentLevel ? ' active' : '') + (is4k ? ' warn-4k' : '');
-    btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
-    btn.dataset.level = realIdx;
-    btn.onclick = () => {
-      // FIX: soft-switch (loadLevel/nextLevel) froze the video track while
-      // audio kept playing in Safari (even at low renditions like 720p).
-      // A full rebuild via setupHls() is the reliable fix in both browsers.
-      localStorage.setItem('vr-quality-lock', realIdx);
-      toggleQualityMenu();
-      setupHls(realIdx, video.currentTime, false);
-    };
-    menu.appendChild(btn);
-  });
-  // Mark saved quality preference as locked in the UI
-  // (the actual level is already correct — setupHls() was started at it directly,
-  // no soft-switch needed here, which is what caused the Safari freeze)
-  const saved = localStorage.getItem('vr-quality-lock');
-  if (saved !== null) {
-    const idx = parseInt(saved);
-    if (idx >= 0 && idx < hls.levels.length) {
-      updateHlsQualityBadge(hls, idx);
-      setTimeout(() => {
-        const savedBtn = menu.querySelector(`.qopt[data-level="${idx}"]`);
-        if (savedBtn) savedBtn.classList.add('locked');
-      }, 50);
-    }
-  }
+
+  // One entry per height (highest first). Phones never see > 1440p.
+  const seen = new Set();
+  hls.levels
+    .map((lvl, idx) => ({ lvl, idx, h: levelHeight(lvl) }))
+    .filter(o => o.h <= MAX_HEIGHT && !seen.has(o.h) && seen.add(o.h))
+    .sort((x, y) => y.h - x.h)
+    .forEach(({ lvl, idx, h }) => {
+      const kbps = Math.round((lvl.bitrate || 0) / 1000);
+      const btn = document.createElement('button');
+      btn.className = 'qopt' + (lock === h ? ' active locked' : '') + (h >= 2160 ? ' warn-4k' : '');
+      btn.textContent = qualityLabel(h) + (kbps ? '  ' + kbps + 'k' : '');
+      btn.dataset.level = idx;
+      btn.onclick = () => {
+        setQualityLock(h); // remembered for THIS video only
+        toggleQualityMenu();
+        setupHls(h, video.currentTime, false);
+      };
+      menu.appendChild(btn);
+    });
 }
 
 let qualMenuOpen = false;
