@@ -1087,8 +1087,17 @@ function updateNativeQualityBadge() {
   const h = video.videoHeight;
   if (!w || !h) return;
   const label = qualityLabel(h);
+  // Native HLS has no quality menu (Safari picks the rendition itself), so
+  // say so on the badge — "AUTO · 2K" — instead of a bare, unclickable label.
+  const badge = document.getElementById('quality-badge');
+  if (!document.getElementById('qauto')) {
+    const auto = document.createElement('span');
+    auto.id = 'qauto';
+    auto.textContent = 'Auto ·';
+    badge.insertBefore(auto, badge.firstChild);
+  }
   document.getElementById('qval-txt').textContent = label;
-  document.getElementById('quality-badge').classList.add('show');
+  badge.classList.add('show');
 }
 
 function updateHlsQualityBadge(hls, levelIdx) {
