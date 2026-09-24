@@ -260,6 +260,22 @@ const IS_MOBILE = (navigator.userAgentData && navigator.userAgentData.mobile) ||
   /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
   (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1); // iPadOS
 const MAX_HEIGHT = IS_MOBILE ? 1440 : Infinity;
+
+// Apple WebKit = desktop Safari and EVERY browser on iPhone/iPad (all of
+// them run on WebKit there). hls.js (MediaSource) + WebGL video textures in
+// WebKit can leave the picture frozen while audio keeps playing; Safari's
+// own HLS player feeds WebGL through AVFoundation and doesn't. So Apple
+// WebKit uses native HLS by default. ?engine=native|hlsjs overrides it for
+// testing/support.
+const UA = navigator.userAgent;
+const IS_IOS = /iPhone|iPad|iPod/.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1);
+const IS_DESKTOP_SAFARI = /Safari\//.test(UA) && /Version\//.test(UA) && !/Chrome|Chromium|Edg\/|OPR\//.test(UA);
+const IS_APPLE_WEBKIT = IS_IOS || IS_DESKTOP_SAFARI;
+const ENGINE_PARAM = (new URLSearchParams(location.search).get('engine') || '').toLowerCase(); // 'native' | 'hlsjs' | ''
+// Safari in hls.js mode: skip levels wider than 4096px (the 4320x2160 rung,
+// H.264 level 6.0) — beyond the usual hardware H.264 decode limit.
+const MAX_WIDTH = IS_APPLE_WEBKIT ? 4096 : Infinity;
+function levelAllowed(l) { return levelHeight(l) <= MAX_HEIGHT && ((l && l.width) || 0) <= MAX_WIDTH; }
 const START_HEIGHT = IS_MOBILE ? 720 : 1080;
 
 // Manual quality choice is remembered by HEIGHT (not level index — ladders
@@ -436,7 +452,10 @@ let sessionRefreshTimer = null;
  * @throws if the Worker request fails or returns a non-OK status
  */
 async function resolveStreamUrl(rawUrl) {
-  const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl), { cache: 'no-store' });
+  // Native HLS can't swap links seamlessly (a new src re-buffers), so it
+  // asks for the Worker's long-lived (~2 h) link instead of the 15-min one.
+  const long = useNativeHls ? '&long=1' : '';
+  const res = await fetch(WORKER_ORIGIN + '/session?url=' + encodeURIComponent(rawUrl) + long, { cache: 'no-store' });
   if (!res.ok) throw new Error('session http ' + res.status);
   return await res.json();
 }
@@ -454,7 +473,7 @@ async function refreshSession() {
   ACTIVE_STREAM_URL = session.proxyUrl;
   sessionExpires = session.expires || (Date.now() / 1000 + (session.ttl || 900));
   if (useNativeHls) {
-    const t = video.currentTime, wasPlaying = !video.paused;
+    const t = video.currentTime || lastGoodTime, wasPlaying = !video.paused || !userPaused;
     video.src = ACTIVE_STREAM_URL;
     video.addEventListener('loadedmetadata', () => {
       if (t > 0) video.currentTime = t;
@@ -506,7 +525,7 @@ function levelHeight(l) { return (l && l.height) || 0; }
 function highestLevelUpTo(levels, maxH) {
   let best = -1;
   levels.forEach((l, i) => {
-    if (levelHeight(l) <= maxH && (best === -1 || levelHeight(l) >= levelHeight(levels[best]))) best = i;
+    if (levelAllowed(l) && levelHeight(l) <= maxH && (best === -1 || levelHeight(l) >= levelHeight(levels[best]))) best = i;
   });
   if (best !== -1) return best;
   let lowest = 0;
@@ -597,7 +616,7 @@ function setupHls(lockHeight, resumeAt, forcePlay) {
     if (hls !== hlsInstance) return;
     const levels = hls.levels;
     const capIdx = highestLevelUpTo(levels, MAX_HEIGHT);
-    if (IS_MOBILE) hls.autoLevelCapping = capIdx; // phones: Auto never goes above 1440p
+    if (IS_MOBILE || MAX_WIDTH !== Infinity) hls.autoLevelCapping = capIdx; // phones ≤1440p, Safari ≤4096px wide
     if (lockHeight) {
       const idx = highestLevelUpTo(levels, Math.min(lockHeight, MAX_HEIGHT));
       hls.startLevel = idx;
@@ -680,6 +699,7 @@ function teardownVideo() {
     old.pause();
     old.removeAttribute('src');
     old.load();
+    old.remove();
   }
   if (videoTexture) { videoTexture.dispose(); videoTexture = null; }
 }
@@ -741,6 +761,11 @@ function createVideoElement() {
   video.playsInline = true;
   video.muted = true; // muted required for autoplay on iOS/Android
   video.setAttribute('webkit-playsinline', '');
+  // Keep it in the DOM (1px, invisible): browsers may throttle or stop
+  // producing frames for a detached <video>, which WebGL then shows frozen.
+  video.setAttribute('aria-hidden', 'true');
+  video.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1';
+  document.body.appendChild(video);
   video.play().catch(() => {}); // "bless" the element inside the tap (no src yet — rejection is expected)
   return video;
 }
@@ -763,6 +788,11 @@ function initThree() {
   v.addEventListener('error', mine(() => {
     console.error('video element error:', v.error);
     if (hlsInstance) return;
+    if (useNativeHls && VIDEO_URL.includes('.m3u8') && fatalRecoveries < MAX_FATAL_RECOVERIES) {
+      fatalRecoveries++;
+      refreshSession().catch(() => showPlayerError('The video could not be loaded. Check your connection and try again.'));
+      return;
+    }
     showPlayerError('The video could not be loaded. Check your connection and try again.');
   }));
   v.addEventListener('waiting', mine(() => document.getElementById('buffering').classList.add('show')));
@@ -794,8 +824,15 @@ function initThree() {
     showPlayerError('The video could not be loaded. Check your connection and try again.');
   };
 
+  const canNative = !!v.canPlayType('application/vnd.apple.mpegurl');
+  const wantNative = ENGINE_PARAM === 'native' ? canNative
+    : ENGINE_PARAM === 'hlsjs' ? !Hls.isSupported() && canNative
+    : (IS_APPLE_WEBKIT && canNative) || (!Hls.isSupported() && canNative);
+  document.body.dataset.engine = VIDEO_URL.includes('.m3u8') ? (wantNative ? 'native' : 'hlsjs') : 'file';
+  console.info('[player] engine:', document.body.dataset.engine);
+
   if (VIDEO_URL.includes('.m3u8')) {
-    if (Hls.isSupported()) {
+    if (!wantNative && Hls.isSupported()) {
       // ── hls.js — used in EVERY browser where it works (Chrome, Firefox,
       // Edge, Android, Quest, and Safari/iOS 17.1+ via ManagedMediaSource).
       // Gives the manual quality menu, the mobile cap and ABR tuning.
@@ -809,9 +846,10 @@ function initThree() {
         setupHls(getQualityLock(), 0, true);
         scheduleSessionRefresh(session.ttl);
       }).catch(onSessionError);
-    } else if (v.canPlayType('application/vnd.apple.mpegurl')) {
-      // ── Native HLS fallback — only for browsers without MSE (older
-      // iOS). The browser picks quality itself; no manual override.
+    } else if (canNative) {
+      // ── Native HLS — Safari / iOS by default (see IS_APPLE_WEBKIT), and
+      // browsers without MSE. The browser picks quality itself (no manual
+      // menu); AVFoundation skips renditions the device can't decode.
       useNativeHls = true;
       resolveStreamUrl(VIDEO_URL).then(session => {
         if (v !== video) return;
@@ -1099,7 +1137,7 @@ function buildQualityMenu(hls) {
   const seen = new Set();
   hls.levels
     .map((lvl, idx) => ({ lvl, idx, h: levelHeight(lvl) }))
-    .filter(o => o.h <= MAX_HEIGHT && !seen.has(o.h) && seen.add(o.h))
+    .filter(o => levelAllowed(o.lvl) && !seen.has(o.h) && seen.add(o.h))
     .sort((x, y) => y.h - x.h)
     .forEach(({ lvl, idx, h }) => {
       const kbps = Math.round((lvl.bitrate || 0) / 1000);
