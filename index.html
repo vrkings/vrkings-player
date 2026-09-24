@@ -372,7 +372,10 @@ function disarmStallWatchdog() {
   }, false);
 })();
 
-let lon = -90, lat = 0;
+// FIX: 180° started at lon=-90, which is the LEFT EDGE of the hemisphere
+// (buildHemi180Geometry maps video u=0/0.5/1 to lon -90/0/+90) — half the
+// screen was black until the viewer dragged. The picture's center is lon=0.
+let lon = IS_180 ? 0 : -90, lat = 0;
 let isDragging = false, prevX = 0, prevY = 0;
 let hintTimer, playerActive = false;
 let currentFov = 75;
