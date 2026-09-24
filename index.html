@@ -761,10 +761,14 @@ function createVideoElement() {
   video.playsInline = true;
   video.muted = true; // muted required for autoplay on iOS/Android
   video.setAttribute('webkit-playsinline', '');
-  // Keep it in the DOM (1px, invisible): browsers may throttle or stop
-  // producing frames for a detached <video>, which WebGL then shows frozen.
+  // FIX (Safari "sound plays, picture frozen"): the element must be in the
+  // DOM. Reproduced in real Safari 18.6 — a detached <video> fed by hls.js
+  // stops decoding after ~1s while audio keeps playing. It must also be
+  // full-viewport: Safari's native HLS picks its rendition by the element's
+  // on-screen size (a 1px element got stuck at 240p). Invisible, behind the
+  // WebGL canvas, and never catches taps.
   video.setAttribute('aria-hidden', 'true');
-  video.style.cssText = 'position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1';
+  video.style.cssText = 'position:fixed;left:0;top:0;width:100vw;height:100vh;opacity:0.01;pointer-events:none;z-index:-1';
   document.body.appendChild(video);
   video.play().catch(() => {}); // "bless" the element inside the tap (no src yet — rejection is expected)
   return video;
