@@ -279,12 +279,14 @@ const ENGINE_PARAM = (new URLSearchParams(location.search).get('engine') || '').
 // Safari in hls.js mode: skip levels wider than 4096px (the 4320x2160 rung,
 // H.264 level 6.0) — beyond the usual hardware H.264 decode limit.
 const MAX_WIDTH = IS_APPLE_WEBKIT ? 4096 : Infinity;
-// Quest 2 decodes the 4320x2160 rung but drops ~14% of frames (measured on a
-// real Quest 2, 2026-09-27). Auto stops at 2K there; 4K stays in the manual
-// menu. Quest 3 is not limited.
+// Quest 2: our 4K rung (H.264 4320x2160@60, level 6.0) is wider than its
+// hardware H.264 decoder handles smoothly — it dropped ~14% of frames even
+// with the WebXR media layer (measured 2026-09-27/29). 4K is hidden there
+// (Auto, menu and VR panel) until a 4096-wide or HEVC/AV1 rung exists.
+// Quest 3 is not limited.
 const IS_QUEST2 = /Quest 2/.test(navigator.userAgent);
 const AUTO_MAX_HEIGHT = IS_QUEST2 ? 1440 : Infinity;
-function levelAllowed(l) { return levelHeight(l) <= MAX_HEIGHT && ((l && l.width) || 0) <= MAX_WIDTH; }
+function levelAllowed(l) { return levelHeight(l) <= MAX_HEIGHT && ((l && l.width) || 0) <= MAX_WIDTH && !(IS_QUEST2 && levelHeight(l) > 1440); }
 const START_HEIGHT = IS_MOBILE ? 720 : 1080;
 
 // Manual quality choice is remembered by HEIGHT (not level index — ladders
@@ -1346,7 +1348,16 @@ function enterVR() {
   if (!navigator.xr || !renderer) return;
   if (renderer.xr.isPresenting) { renderer.xr.getSession().end(); return; }
   // requestSession must run inside the tap — no await before it
-  navigator.xr.requestSession('immersive-vr', { optionalFeatures: ['local-floor'] }).then(async session => {
+  // Preferred: WebXR Layers (the headset compositor draws the video — smooth
+  // 2K on Quest 2). Ask for 'layers' only when we will use it: with 'layers'
+  // enabled the three.js (baseLayer) fallback does not start on Quest Browser.
+  const wantLayers = !LX_FORCE_OFF && typeof XRMediaBinding !== 'undefined' && typeof XRWebGLBinding !== 'undefined';
+  navigator.xr.requestSession('immersive-vr', { optionalFeatures: wantLayers ? ['local-floor', 'layers'] : ['local-floor'] }).then(async session => {
+    const canLayers = wantLayers && session.enabledFeatures && session.enabledFeatures.includes('layers');
+    if (canLayers) {
+      try { await lxStart(session); return; }
+      catch (err) { console.warn('WebXR Layers failed:', err); showToast('VR mode failed: ' + (err && err.message || err)); lx = null; session.end(); return; }
+    }
     renderer.xr.setReferenceSpaceType('local');
     await renderer.xr.setSession(session);
     if (IS_180) {
@@ -1697,6 +1708,202 @@ setInterval(() => {
   const el = document.getElementById('xr-diag');
   if (el) { renderDiag(); el.textContent += '\n' + qDiagText(); }
 }, 1000);
+
+// ══ VR via WebXR Layers (Quest Browser) ═══════════════════════
+// The headset compositor draws the video itself (XRMediaBinding equirect
+// layer) — no per-frame copy of the video into WebGL/three.js. Panel, hint
+// and the small time indicator are XRQuadLayers drawn from the same canvases
+// as the three.js VR mode. If 'layers' isn't granted, enterVR() falls back to
+// the existing three.js path.
+// URL params (testing): layers=0 → force three.js path · yaw=<deg> extra turn
+// of the video layer · flip=0 → don't flip quad textures vertically.
+const LX_P = new URLSearchParams(location.search);
+const LX_FORCE_OFF = LX_P.get('layers') === '0';
+const LX_EXTRA_YAW = parseFloat(LX_P.get('yaw') || '0') * Math.PI / 180;
+const LX_FLIP = LX_P.get('flip') !== '0';
+// Quest Browser renders XRQuadLayer width/height as HALF-extents (a 0.9 m
+// value showed a ~1.8 m panel on Quest 2, 2026-09-29), so pass half sizes to
+// get the same on-screen size as the three.js VR panel. qhalf=0 → full sizes.
+const LX_QUAD_SIZE_FACTOR = LX_P.get('qhalf') === '0' ? 1 : 0.5;
+let lx = null; // active layers session state
+
+function lxQuatY(a) { return { x: 0, y: Math.sin(a / 2), z: 0, w: Math.cos(a / 2) }; }
+
+function lxMakeQuad(name, w, h, pxW, pxH) {
+  const canvas = document.createElement('canvas'); canvas.width = pxW; canvas.height = pxH;
+  const plane = { name, canvas, ctx: canvas.getContext('2d'), tex: { needsUpdate: true }, w, h, pxW, pxH, layer: null, visible: false, pose: null };
+  plane.layer = lx.glBinding.createQuadLayer({ space: lx.ref, viewPixelWidth: pxW, viewPixelHeight: pxH, layout: 'mono', width: w * LX_QUAD_SIZE_FACTOR, height: h * LX_QUAD_SIZE_FACTOR });
+  return plane;
+}
+
+// Place a quad in front of the viewer (level with the horizon), `drop` m lower, facing the viewer
+function lxPlace(plane, frame, dist, drop) {
+  const vp = frame.getViewerPose(lx.ref); if (!vp) return false;
+  const t = vp.transform, p = t.position, o = t.orientation;
+  const f = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(o.x, o.y, o.z, o.w));
+  f.y = 0; if (f.lengthSq() < 1e-4) f.set(0, 0, -1); f.normalize();
+  const pos = { x: p.x + f.x * dist, y: p.y - drop, z: p.z + f.z * dist };
+  const yaw = Math.atan2(-f.x, -f.z); // quad's +Z (its front) faces the viewer
+  plane.layer.transform = new XRRigidTransform(pos, lxQuatY(yaw));
+  plane.pose = { pos: new THREE.Vector3(pos.x, pos.y, pos.z), quat: new THREE.Quaternion(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)) };
+  return true;
+}
+
+function lxSetVisible(plane, v) {
+  if (plane.visible === v) return;
+  plane.visible = v; lx.layersDirty = true;
+  if (v) plane.tex.needsUpdate = true;
+}
+
+function lxApplyLayers() {
+  if (!lx.layersDirty) return;
+  lx.layersDirty = false;
+  const list = [lx.media];
+  [lx.panel, lx.hint, lx.mini].forEach(q => { if (q.visible) list.push(q.layer); });
+  lx.session.updateRenderState({ layers: list });
+}
+
+// Upload a canvas into its quad layer (only when changed or the compositor asks)
+function lxUpload(plane, frame) {
+  if (!plane.visible || !(plane.tex.needsUpdate || plane.layer.needsRedraw)) return;
+  const gl = lx.gl, sub = lx.glBinding.getSubImage(plane.layer, frame);
+  gl.bindTexture(gl.TEXTURE_2D, sub.colorTexture);
+  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, LX_FLIP);
+  gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, gl.RGBA, gl.UNSIGNED_BYTE, plane.canvas);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+  plane.tex.needsUpdate = false;
+}
+
+// Controller ray → hit on the panel quad (canvas px) or null
+function lxPanelHit(src, frame) {
+  if (!lx.panel.visible || !lx.panel.pose) return null;
+  const rp = frame.getPose(src.targetRaySpace, lx.ref); if (!rp) return null;
+  const t = rp.transform, o = new THREE.Vector3(t.position.x, t.position.y, t.position.z);
+  const d = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w));
+  const inv = lx.panel.pose.quat.clone().invert();
+  const lo = o.clone().sub(lx.panel.pose.pos).applyQuaternion(inv), ld = d.clone().applyQuaternion(inv);
+  if (Math.abs(ld.z) < 1e-6) return null;
+  const k = -lo.z / ld.z; if (k <= 0) return null;
+  const hx = lo.x + ld.x * k, hy = lo.y + ld.y * k;
+  const W = lx.panel.w, H = lx.panel.h;
+  if (Math.abs(hx) > W / 2 || Math.abs(hy) > H / 2) return null;
+  const x = (hx / W + 0.5) * 1024, y = (0.5 - hy / H) * 384;
+  const inside = ([rx, ry, rw, rh], pad) => x >= rx - pad && x <= rx + rw + pad && y >= ry - pad && y <= ry + rh + pad;
+  let target = inside(XP.play, 10) ? 'play' : inside(XP.exit, 10) ? 'exit' : inside(XP.bar, 40) ? 'bar' : 'panel';
+  if (target === 'panel' && hlsInstance && !useNativeHls) { const qb = xrQualityButtons().find(b => inside(b.rect, 6)); if (qb) target = qb.id; }
+  return { x, y, target };
+}
+
+function lxDrawPanel() {
+  xrDrawPanel(); // shared drawing (uses xrCtl.panel / hover / hoverX)
+  if (lx.cursor) { const c = lx.panel.ctx; c.fillStyle = 'rgba(240,204,122,0.9)'; c.beginPath(); c.arc(lx.cursor.x, lx.cursor.y, 9, 0, Math.PI * 2); c.fill(); }
+  lx.panel.tex.needsUpdate = true;
+}
+
+function lxShowPanel(frame) {
+  if (!lx.panel.visible) { if (!lxPlace(lx.panel, frame, XR_PANEL_DIST, XR_PANEL_DROP)) return; lxSetVisible(lx.panel, true); }
+  lxSetVisible(lx.mini, false);
+  lx.lastActivity = performance.now();
+  lxDrawPanel();
+}
+function lxHidePanel() { lxSetVisible(lx.panel, false); lx.cursor = null; }
+
+function lxMini(text) {
+  if (!lx) return;
+  if (lx.panel.visible) { lxDrawPanel(); return; }
+  xrDrawText(lx.mini, text, 44);
+  lx.miniText = true; lx.miniPending = !lx.mini.visible; lx.miniUntil = performance.now() + 1500;
+}
+
+function lxOnSelect(e) {
+  if (!lx) return;
+  const frame = e.frame;
+  if (!lx.panel.visible) { lxShowPanel(frame); return; }
+  const hit = lxPanelHit(e.inputSource, frame);
+  if (!hit) { lxHidePanel(); return; }
+  lx.lastActivity = performance.now();
+  if (hit.target === 'play') { togglePlay(); lxDrawPanel(); }
+  else if (hit.target === 'exit') lx.session.end();
+  else if (hit.target === 'bar' && video && video.duration) { const [bx, , bw] = XP.bar; video.currentTime = Math.max(0, Math.min(1, (hit.x - bx) / bw)) * video.duration; lxDrawPanel(); }
+  else if (hit.target.startsWith('q:')) { const v = hit.target.slice(2); qSet(v === 'auto' ? null : +v); setTimeout(() => { if (lx && lx.panel.visible) lxDrawPanel(); }, 600); }
+}
+
+function lxFrame(t, frame) {
+  if (!lx) return;
+  lx.session.requestAnimationFrame(lxFrame);
+  window.__lxFrames = (window.__lxFrames || 0) + 1;
+  const now = performance.now();
+  if (lx.hintPending && lxPlace(lx.hint, frame, 1.3, 0.05)) { lxSetVisible(lx.hint, true); lx.hintUntil = now + 4000; lx.hintPending = false; }
+  if (lx.hint.visible && now > lx.hintUntil) lxSetVisible(lx.hint, false);
+  if (lx.miniPending && lxPlace(lx.mini, frame, 1.3, 0.22)) { lxSetVisible(lx.mini, true); lx.miniPending = false; }
+  if (lx.mini.visible && now > lx.miniUntil) lxSetVisible(lx.mini, false);
+
+  for (const src of lx.session.inputSources) {
+    const gp = src.gamepad; if (!gp) continue;
+    const key = src.handedness || 'none';
+    const pressed = i => !!(gp.buttons[i] && gp.buttons[i].pressed);
+    const prev = lx.buttons.get(key) || {};
+    if (pressed(4) && !prev.a) { togglePlay(); lxMini((video && video.paused ? 'Paused' : 'Playing') + ' · ' + xrTimeText()); }
+    if (pressed(5) && !prev.b) { lx.session.end(); return; }
+    lx.buttons.set(key, { a: pressed(4), b: pressed(5) });
+    const x = gp.axes.length > 2 ? gp.axes[2] : (gp.axes[0] || 0);
+    const st = lx.stick.get(key) || { held: 0, next: 0, since: 0, total: 0 };
+    const step = d => { xrSeek(d); st.total += d; lxMini((st.total > 0 ? '+' : '−') + Math.abs(st.total) + 's · ' + xrTimeText()); };
+    if (Math.abs(x) > 0.6) {
+      const d = x > 0 ? 1 : -1;
+      if (st.held !== d) { st.held = d; st.since = now; st.total = 0; step(10 * d); st.next = now + 450; }
+      else if (now >= st.next) { const held = now - st.since; step((held > 2500 ? 30 : 10) * d); st.next = now + (held > 1500 ? 150 : 250); }
+    } else if (Math.abs(x) < 0.3) st.held = 0;
+    lx.stick.set(key, st);
+  }
+
+  if (lx.panel.visible) {
+    let hover = null, hoverX = null, cursor = null;
+    for (const src of lx.session.inputSources) {
+      const hit = lxPanelHit(src, frame);
+      if (hit) { cursor = { x: hit.x, y: hit.y }; if (hit.target !== 'panel') { hover = hit.target; hoverX = hit.x; } lx.lastActivity = now; }
+    }
+    const moved = (cursor && (!lx.cursor || Math.hypot(cursor.x - lx.cursor.x, cursor.y - lx.cursor.y) > 6)) || (!cursor && lx.cursor);
+    if (hover !== xrCtl.hover || hoverX !== xrCtl.hoverX || moved || now - lx.lastDraw > 250) { xrCtl.hover = hover; xrCtl.hoverX = hoverX; lx.cursor = cursor; lx.lastDraw = now; lxDrawPanel(); }
+    if (now - lx.lastActivity > 4000) lxHidePanel();
+  }
+
+  lxApplyLayers();
+  [lx.panel, lx.hint, lx.mini].forEach(q => lxUpload(q, frame));
+}
+
+async function lxStart(session) {
+  const ref = await session.requestReferenceSpace('local');
+  const glCanvas = document.createElement('canvas');
+  const gl = glCanvas.getContext('webgl2', { xrCompatible: true, alpha: true });
+  const glBinding = new XRWebGLBinding(session, gl);
+  const mediaBinding = new XRMediaBinding(session);
+  lx = { session, ref, gl, glBinding, layersDirty: true, buttons: new Map(), stick: new Map(), lastActivity: 0, lastDraw: 0, cursor: null, savedXrCtl: xrCtl };
+  // Video: the compositor samples the <video> directly
+  const yaw = (IS_180 ? 0 : Math.PI / 2) + LX_EXTRA_YAW; // 360: same forward view as the three.js mode (u=0.75 ahead)
+  lx.media = mediaBinding.createEquirectLayer(video, {
+    space: ref,
+    layout: IS_180 ? 'stereo-left-right' : 'mono',
+    centralHorizontalAngle: IS_180 ? Math.PI : Math.PI * 2,
+    upperVerticalAngle: Math.PI / 2,
+    lowerVerticalAngle: -Math.PI / 2,
+    radius: 0,
+    transform: new XRRigidTransform({ x: 0, y: 0, z: 0 }, lxQuatY(yaw)),
+  });
+  lx.panel = lxMakeQuad('panel', XR_PANEL_W, XR_PANEL_H, 1024, 384);
+  lx.hint = lxMakeQuad('hint', 1.1, 0.12, 1400, 150);
+  lx.mini = lxMakeQuad('mini', 0.55, 0.0825, 640, 96);
+  // shared drawing code expects xrCtl.{panel,hover,hoverX}
+  xrCtl = { panel: lx.panel, hover: null, hoverX: null };
+  xrDrawText(lx.hint, 'Trigger: controls · A: play/pause · Stick: seek · B: exit', 40);
+  lx.hintPending = true;
+  session.addEventListener('select', lxOnSelect);
+  session.addEventListener('end', () => { window.__lxSession = null; xrCtl = lx ? lx.savedXrCtl : xrCtl; lx = null; renderer.setSize(window.innerWidth, window.innerHeight); });
+  window.__lxSession = session;
+  lxApplyLayers();
+  session.requestAnimationFrame(lxFrame);
+  if (video && video.paused) video.play().catch(() => {});
+}
 </script>
 </body>
 </html>
