@@ -25,7 +25,7 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 .splash-title{font-family:'Cormorant Garamond',serif;font-size:clamp(2.6rem,8vw,5rem);font-weight:300;line-height:1.05;color:#fff;margin-bottom:.7rem;animation:rise .9s .13s both;}
 .splash-title em{font-style:italic;color:var(--gold2);}
 .splash-sub{font-size:.9rem;font-weight:300;color:var(--muted);line-height:1.75;max-width:320px;margin:0 auto 2.6rem;animation:rise .9s .18s both;}
-.hints{display:flex;align-items:center;justify-content:center;gap:2rem;margin-bottom:2.6rem;animation:rise .9s .23s both;}
+.hints{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1.2rem 2rem;margin-bottom:2.6rem;animation:rise .9s .23s both;}
 .hint{display:flex;flex-direction:column;align-items:center;gap:.4rem;font-size:.67rem;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;}
 .hico{width:42px;height:42px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gold);}
 .hico svg{width:19px;height:19px;}
@@ -121,7 +121,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
 #quality-badge.show{display:flex;}
 #player-toast{position:fixed;left:50%;bottom:6.5rem;transform:translate(-50%,8px);z-index:300;width:max-content;max-width:min(90vw,420px);box-sizing:border-box;padding:.7rem 1.1rem;border-radius:14px;background:rgba(7,8,11,.88);border:1px solid var(--border);color:var(--text);font:400 .82rem/1.45 Outfit,sans-serif;text-align:center;backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;}
 #player-toast.show{opacity:1;transform:translate(-50%,0);}
-@media (max-width:440px){#vol,#zoom-wrap{display:none !important;}}
+@media (max-width:440px){#vol,#zoom-wrap{display:none !important;}.hints{gap:1.1rem 0;}.hints .hint{flex:0 0 46%;}}
 #quality-badge .qval{color:var(--gold2);font-weight:500;}
 /* Quality menu */
 #quality-menu{position:fixed;bottom:5.5rem;right:1.8rem;z-index:102;display:none;flex-direction:column;gap:.3rem;background:rgba(10,11,16,.92);border:1px solid rgba(212,168,67,.18);border-radius:10px;padding:.5rem;backdrop-filter:blur(10px);min-width:110px;}
@@ -161,6 +161,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
       <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/></svg></div>Drag mouse</div>
       <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v4M12 18v4M8 12H4M20 12h-4"/><circle cx="12" cy="12" r="3"/></svg></div>Scroll to zoom</div>
       <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></div>Swipe on phone</div>
+      <div class="hint" id="hint-motion" style="display:none"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8.5" y="5" width="7" height="14" rx="1.5"/><path d="M4.5 8.5A8.5 8.5 0 0 1 8 4.2"/><path d="M19.5 15.5A8.5 8.5 0 0 1 16 19.8"/><path d="M4 5.5l.5 3 3-.5"/><path d="M20 18.5l-.5-3-3 .5"/></svg></div>Move your phone</div>
     </div>
     <div class="btn-row-splash">
       <div class="btn-with-desc">
@@ -992,7 +993,7 @@ function initThree() {
  * across [0,1] over a 360° sweep — but the SBS left-eye image only contains
  * 180°-calibrated content, so every degree of real content was stretched
  * across 2 degrees of sphere. That 2x azimuthal stretch is exactly the
- * "розтягнуто" (stretched) distortion reported for ?type=180 while ?type=360
+ * "stretched" distortion reported for ?type=180 while ?type=360
  * looked fine (it wasn't correct either — it just happened to look
  * plausible staring straight ahead, since that's a small enough patch of
  * UV space for the global mis-projection to be less obvious there).
@@ -1354,28 +1355,17 @@ function toggleMotion() {
 // immersive-web samples), again on navigator.xr 'devicechange', and again
 // when the player starts. Headsets (Quest Browser) report touch +
 // DeviceOrientationEvent but have no phone gyroscope: they get VR, not MOTION.
-const XR_TEST_BUILD = '6 · 2026-09-25';
 let IS_HEADSET = /OculusBrowser|Quest|Pico/i.test(navigator.userAgent);
 let XR_STATE = !('xr' in navigator) ? 'no navigator.xr' : 'checking…';
 function updateMotionButton() {
-  document.getElementById('motion-btn').style.display = (motionSupported() && !IS_HEADSET) ? 'flex' : 'none';
+  const on = motionSupported() && !IS_HEADSET;
+  document.getElementById('motion-btn').style.display = on ? 'flex' : 'none';
+  document.getElementById('hint-motion').style.display = on ? 'flex' : 'none'; // splash hint: phones/tablets only
 }
 function updateVrButton() {
   document.getElementById('vr-btn').style.display = XR_STATE === true ? 'flex' : 'none';
 }
-function renderDiag() {
-  const el = document.getElementById('xr-diag');
-  if (!el) return;
-  el.textContent =
-    'XR TEST build ' + XR_TEST_BUILD +
-    ' | navigator.xr: ' + ('xr' in navigator ? 'yes' : 'NO') +
-    ' | immersive-vr supported: ' + XR_STATE +
-    ' | three.js r' + (window.THREE ? THREE.REVISION : '?') +
-    ' | touch: ' + ('ontouchstart' in window ? 'yes' : 'no') +
-    ' | headset: ' + (IS_HEADSET ? 'yes' : 'no') +
-    ' | secure: ' + (window.isSecureContext ? 'yes' : 'NO') +
-    '\nUA: ' + navigator.userAgent;
-}
+function renderDiag() {} // diagnostics line exists only on staging test pages
 function xrCheck() {
   if (!navigator.xr || !navigator.xr.isSessionSupported) { updateMotionButton(); updateVrButton(); renderDiag(); return; }
   navigator.xr.isSessionSupported('immersive-vr')
