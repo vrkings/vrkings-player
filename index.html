@@ -25,7 +25,7 @@ body::before{content:'';position:fixed;inset:0;z-index:999;pointer-events:none;o
 .splash-title{font-family:'Cormorant Garamond',serif;font-size:clamp(2.6rem,8vw,5rem);font-weight:300;line-height:1.05;color:#fff;margin-bottom:.7rem;animation:rise .9s .13s both;}
 .splash-title em{font-style:italic;color:var(--gold2);}
 .splash-sub{font-size:.9rem;font-weight:300;color:var(--muted);line-height:1.75;max-width:320px;margin:0 auto 2.6rem;animation:rise .9s .18s both;}
-.hints{display:flex;align-items:center;justify-content:center;gap:2rem;margin-bottom:2.6rem;animation:rise .9s .23s both;}
+.hints{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:1.2rem 2rem;margin-bottom:2.6rem;animation:rise .9s .23s both;}
 .hint{display:flex;flex-direction:column;align-items:center;gap:.4rem;font-size:.67rem;color:var(--muted);letter-spacing:.05em;text-transform:uppercase;}
 .hico{width:42px;height:42px;border-radius:50%;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;color:var(--gold);}
 .hico svg{width:19px;height:19px;}
@@ -121,7 +121,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
 #quality-badge.show{display:flex;}
 #player-toast{position:fixed;left:50%;bottom:6.5rem;transform:translate(-50%,8px);z-index:300;width:max-content;max-width:min(90vw,420px);box-sizing:border-box;padding:.7rem 1.1rem;border-radius:14px;background:rgba(7,8,11,.88);border:1px solid var(--border);color:var(--text);font:400 .82rem/1.45 Outfit,sans-serif;text-align:center;backdrop-filter:blur(8px);opacity:0;pointer-events:none;transition:opacity .25s,transform .25s;}
 #player-toast.show{opacity:1;transform:translate(-50%,0);}
-@media (max-width:440px){#vol,#zoom-wrap{display:none !important;}}
+@media (max-width:440px){#vol,#zoom-wrap{display:none !important;}.hints{gap:1.1rem 0;}.hints .hint{flex:0 0 46%;}}
 #quality-badge .qval{color:var(--gold2);font-weight:500;}
 /* Quality menu */
 #quality-menu{position:fixed;bottom:5.5rem;right:1.8rem;z-index:102;display:none;flex-direction:column;gap:.3rem;background:rgba(10,11,16,.92);border:1px solid rgba(212,168,67,.18);border-radius:10px;padding:.5rem;backdrop-filter:blur(10px);min-width:110px;}
@@ -161,6 +161,7 @@ input#vol::-webkit-slider-thumb{-webkit-appearance:none;width:11px;height:11px;b
       <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M2 12h20M9 5l3-3 3 3M9 19l3 3 3-3M12 2v20"/></svg></div>Drag mouse</div>
       <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v4M12 18v4M8 12H4M20 12h-4"/><circle cx="12" cy="12" r="3"/></svg></div>Scroll to zoom</div>
       <div class="hint"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="2" width="14" height="20" rx="2"/><circle cx="12" cy="17" r="1" fill="currentColor"/></svg></div>Swipe on phone</div>
+      <div class="hint" id="hint-motion" style="display:none"><div class="hico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="8.5" y="5" width="7" height="14" rx="1.5"/><path d="M4.5 8.5A8.5 8.5 0 0 1 8 4.2"/><path d="M19.5 15.5A8.5 8.5 0 0 1 16 19.8"/><path d="M4 5.5l.5 3 3-.5"/><path d="M20 18.5l-.5-3-3 .5"/></svg></div>Move your phone</div>
     </div>
     <div class="btn-row-splash">
       <div class="btn-with-desc">
@@ -485,7 +486,7 @@ async function refreshSession() {
   sessionExpires = session.expires || (Date.now() / 1000 + (session.ttl || 900));
   if (useNativeHls) {
     const t = video.currentTime || lastGoodTime, wasPlaying = !video.paused || !userPaused;
-    video.src = ACTIVE_STREAM_URL;
+    video.src = nativeSrcFor(getQualityLock()); // keeps a manually chosen rendition
     video.addEventListener('loadedmetadata', () => {
       if (t > 0) video.currentTime = t;
       if (wasPlaying) video.play().catch(() => {});
@@ -768,6 +769,81 @@ function ensureScene() {
  * play WITH sound later (after the async session fetch), instead of pausing
  * it the moment we unmute.
  */
+// ── Native HLS (Safari / iOS): rendition choice follows the on-screen size ──
+// Measured (Safari 18.6, 2026): native HLS picks the smallest rendition that
+// is at least the displayed video rect in device pixels — an iPhone in
+// portrait (390 pt wide, 2:1 video → 390x195 pt, x3 = 1170x585 px) got stuck
+// at 1440x720. We size the (invisible) element so the video rect is a fixed
+// 2880x1440 device px in any orientation. ?vsize= overrides for testing.
+const NATIVE_VSIZE = (new URLSearchParams(location.search).get('vsize') || 't1440').toLowerCase();
+function sizeNativeVideo(v) {
+  if (!v) return;
+  const m = /^t(\d+)(s?)$/.exec(NATIVE_VSIZE);
+  if (!m) { // 'vp' — previous behaviour: the viewport
+    Object.assign(v.style, { width: '100vw', height: '100vh', objectFit: '', transform: '', transformOrigin: '' });
+    return;
+  }
+  const dpr = window.devicePixelRatio || 1;
+  const aspect = (v.videoWidth && v.videoHeight) ? v.videoWidth / v.videoHeight : 2; // our 180/360 videos are 2:1
+  const h = +m[1] / dpr, w = h * aspect;
+  const style = { width: w + 'px', height: h + 'px', objectFit: 'fill', transform: '', transformOrigin: '0 0' };
+  if (m[2]) style.transform = 'scale(' + Math.min(1, window.innerWidth / w, window.innerHeight / h) + ')'; // visually fits the viewport
+  Object.assign(v.style, style);
+}
+window.addEventListener('resize', () => { if (useNativeHls && video) sizeNativeVideo(video); });
+window.addEventListener('orientationchange', () => { if (useNativeHls && video) setTimeout(() => sizeNativeVideo(video), 300); });
+
+// ── (b) manual quality in native mode: the master playlist's renditions ────
+let nativeVariants = []; // [{ w, h, bw, uri (relative to the master) }]
+async function loadNativeVariants() {
+  nativeVariants = [];
+  try {
+    const txt = await (await fetch(ACTIVE_STREAM_URL, { cache: 'no-store' })).text();
+    const lines = txt.split(/\r?\n/);
+    lines.forEach((l, i) => {
+      if (!l.startsWith('#EXT-X-STREAM-INF')) return;
+      const r = /RESOLUTION=(\d+)x(\d+)/.exec(l), b = /BANDWIDTH=(\d+)/.exec(l);
+      let j = i + 1; while (j < lines.length && (!lines[j] || lines[j].startsWith('#'))) j++;
+      if (!r || j >= lines.length) return;
+      const v = { w: +r[1], h: +r[2], bw: b ? +b[1] : 0, uri: lines[j].trim() };
+      if (levelAllowed({ width: v.w, height: v.h })) nativeVariants.push(v);
+    });
+    nativeVariants.sort((a, b) => b.h - a.h);
+  } catch (e) { console.warn('native variants:', e); }
+  return nativeVariants;
+}
+// src for a locked height (null = Auto → the master playlist)
+function nativeSrcFor(h) {
+  if (!h || !nativeVariants.length) return ACTIVE_STREAM_URL;
+  const v = nativeVariants.find(x => x.h === h) || nativeVariants.find(x => x.h <= h) || nativeVariants[nativeVariants.length - 1];
+  return new URL(v.uri, ACTIVE_STREAM_URL).href;
+}
+function switchNativeQuality(h) {
+  const t = video.currentTime || lastGoodTime, wasPlaying = !video.paused || !userPaused;
+  video.src = nativeSrcFor(h);
+  video.addEventListener('loadedmetadata', () => {
+    if (t > 0) video.currentTime = t;
+    if (wasPlaying) video.play().catch(() => {});
+  }, { once: true });
+}
+function buildNativeQualityMenu() {
+  const menu = document.getElementById('quality-menu');
+  menu.innerHTML = '';
+  const lbl = document.createElement('button'); lbl.className = 'qopt auto-label'; lbl.textContent = 'Quality'; menu.appendChild(lbl);
+  const lock = getQualityLock();
+  const add = (text, h) => {
+    const b = document.createElement('button');
+    b.className = 'qopt' + ((h || null) === lock ? ' active' : '') + (h >= 2160 ? ' warn-4k' : '');
+    b.textContent = text; b.dataset.level = h ? String(h) : '-1';
+    b.onclick = () => { setQualityLock(h || null); toggleQualityMenu(); switchNativeQuality(h || null); buildNativeQualityMenu(); updateNativeQualityBadge(); };
+    menu.appendChild(b);
+  };
+  add('Auto', null);
+  nativeVariants.forEach(v => add(qualityLabel(v.h) + (v.bw ? '  ' + Math.round(v.bw / 1000) + 'k' : ''), v.h));
+  const btn = document.getElementById('qual-btn');
+  btn.style.display = nativeVariants.length ? 'flex' : 'none';
+}
+
 function createVideoElement() {
   video = document.createElement('video');
   video.crossOrigin = 'anonymous';
@@ -869,11 +945,16 @@ function initThree() {
       // browsers without MSE. The browser picks quality itself (no manual
       // menu); AVFoundation skips renditions the device can't decode.
       useNativeHls = true;
-      resolveStreamUrl(VIDEO_URL).then(session => {
+      sizeNativeVideo(v);
+      v.addEventListener('loadedmetadata', mine(() => sizeNativeVideo(v))); // real aspect ratio
+      resolveStreamUrl(VIDEO_URL).then(async session => {
         if (v !== video) return;
         ACTIVE_STREAM_URL = session.proxyUrl;
         sessionExpires = session.expires || 0;
-        v.src = ACTIVE_STREAM_URL;
+        await loadNativeVariants();
+        if (v !== video) return;
+        v.src = nativeSrcFor(getQualityLock());
+        buildNativeQualityMenu();
         scheduleSessionRefresh(session.ttl);
       }).catch(onSessionError);
       v.addEventListener('playing', mine(updateNativeQualityBadge));
@@ -912,7 +993,7 @@ function initThree() {
  * across [0,1] over a 360° sweep — but the SBS left-eye image only contains
  * 180°-calibrated content, so every degree of real content was stretched
  * across 2 degrees of sphere. That 2x azimuthal stretch is exactly the
- * "розтягнуто" (stretched) distortion reported for ?type=180 while ?type=360
+ * "stretched" distortion reported for ?type=180 while ?type=360
  * looked fine (it wasn't correct either — it just happened to look
  * plausible staring straight ahead, since that's a small enough patch of
  * UV space for the global mis-projection to be less obvious there).
@@ -1120,7 +1201,9 @@ function updateNativeQualityBadge() {
     auto.textContent = 'Auto ·';
     badge.insertBefore(auto, badge.firstChild);
   }
+  document.getElementById('qauto').style.display = getQualityLock() === null ? '' : 'none';
   document.getElementById('qval-txt').textContent = label;
+  if (useNativeHls && nativeVariants.length) document.getElementById('qual-btn').textContent = label;
   badge.classList.add('show');
 }
 
@@ -1272,28 +1355,17 @@ function toggleMotion() {
 // immersive-web samples), again on navigator.xr 'devicechange', and again
 // when the player starts. Headsets (Quest Browser) report touch +
 // DeviceOrientationEvent but have no phone gyroscope: they get VR, not MOTION.
-const XR_TEST_BUILD = '6 · 2026-09-25';
 let IS_HEADSET = /OculusBrowser|Quest|Pico/i.test(navigator.userAgent);
 let XR_STATE = !('xr' in navigator) ? 'no navigator.xr' : 'checking…';
 function updateMotionButton() {
-  document.getElementById('motion-btn').style.display = (motionSupported() && !IS_HEADSET) ? 'flex' : 'none';
+  const on = motionSupported() && !IS_HEADSET;
+  document.getElementById('motion-btn').style.display = on ? 'flex' : 'none';
+  document.getElementById('hint-motion').style.display = on ? 'flex' : 'none'; // splash hint: phones/tablets only
 }
 function updateVrButton() {
   document.getElementById('vr-btn').style.display = XR_STATE === true ? 'flex' : 'none';
 }
-function renderDiag() {
-  const el = document.getElementById('xr-diag');
-  if (!el) return;
-  el.textContent =
-    'XR TEST build ' + XR_TEST_BUILD +
-    ' | navigator.xr: ' + ('xr' in navigator ? 'yes' : 'NO') +
-    ' | immersive-vr supported: ' + XR_STATE +
-    ' | three.js r' + (window.THREE ? THREE.REVISION : '?') +
-    ' | touch: ' + ('ontouchstart' in window ? 'yes' : 'no') +
-    ' | headset: ' + (IS_HEADSET ? 'yes' : 'no') +
-    ' | secure: ' + (window.isSecureContext ? 'yes' : 'NO') +
-    '\nUA: ' + navigator.userAgent;
-}
+function renderDiag() {} // diagnostics line exists only on staging test pages
 function xrCheck() {
   if (!navigator.xr || !navigator.xr.isSessionSupported) { updateMotionButton(); updateVrButton(); renderDiag(); return; }
   navigator.xr.isSessionSupported('immersive-vr')
