@@ -921,7 +921,13 @@ function initThree() {
   const canNative = !!v.canPlayType('application/vnd.apple.mpegurl');
   const wantNative = ENGINE_PARAM === 'native' ? canNative
     : ENGINE_PARAM === 'hlsjs' ? !Hls.isSupported() && canNative
-    : (IS_APPLE_WEBKIT && canNative) || (!Hls.isSupported() && canNative);
+    // iPhone/iPad: hls.js (ManagedMediaSource, iOS 17.1+) — tested on real
+    // iPhones (Safari + Chrome, 2026-10): quicker seeking and seamless quality
+    // switches vs native HLS (which re-buffers on every src change). The
+    // <video> stays in the DOM, so the old hls.js+Safari freeze does not apply.
+    // Desktop Safari keeps native HLS (2K, ~1% dropped frames measured).
+    // Older iOS without MSE/MMS falls back to native automatically.
+    : (IS_DESKTOP_SAFARI && !IS_IOS && canNative) || (!Hls.isSupported() && canNative); // iOS Safari's UA also looks like desktop Safari
   document.body.dataset.engine = VIDEO_URL.includes('.m3u8') ? (wantNative ? 'native' : 'hlsjs') : 'file';
   console.info('[player] engine:', document.body.dataset.engine);
 
